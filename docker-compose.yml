@@ -1,0 +1,10 @@
+version: "3"
+services:
+    nerf_ttt_api:
+        build: .
+        image: nerf_ttt_api
+        container_name: nerf_ttt_api
+        ports:
+            - '8080:3000'
+        volumes:
+            - ./:/usr/src/app
