@@ -8,6 +8,7 @@ const tsProject = ts.createProject('tsconfig.json');
 
 // Clean distribution directory
 function cleanup() {
+	console.log(__dirname);
 	return gulp.src('dist/**/*', {read: false})
 		.pipe(clean());
 }

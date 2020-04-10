@@ -12,6 +12,7 @@ EXPOSE 3000
 
 COPY tsconfig.json ./
 COPY gulpfile.js ./
+ADD src/ src/
 
 RUN gulp
 

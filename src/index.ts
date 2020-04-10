@@ -1,10 +1,11 @@
 import * as express from 'express';
-import {Request, Response} from 'express';
+import {Application} from 'express';
 import {Client} from 'pg';
-import {postgresConfig} from './config.js';
+import {postgresConfig} from './config';
 import {Server} from 'http';
-import {Routes} from './routes.js';
-const bodyParser = require('body-parser');
+import {Routes} from './controller';
+
+import * as bodyParser from 'body-parser';
 
 export class TTTAPI {
 	app: express.Application;
@@ -24,17 +25,19 @@ export class TTTAPI {
 	}
 
 	async start(): Promise<void> {
-		this.app = express();
 		this.app.use(bodyParser.json());
 
 		// Connect postgres
 		await this.connectPostgres();
+		console.log('Connected Postgres');
 
 		// Apply routes
 		this.app.use(this.routeManager.getRouter());
+		console.log('Applied Routes');
 
 		// Start express
 		this.server = this.app.listen(this.port);
+		console.log('Started Express');
 	}
 
 	async connectPostgres(): Promise<void> {
@@ -43,5 +46,6 @@ export class TTTAPI {
 	}
 }
 
+console.log('Starting server…');
 const api = new TTTAPI(3000);
-api.start().then(() => console.log('Started'));
+api.start().then(() => console.log('Ready'));
