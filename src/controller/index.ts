@@ -4,12 +4,14 @@ import {TTTAPI} from '..';
 // Api endpoints
 import {PlayerController} from './player';
 import {LobbyController} from './lobby';
+import {LoginController} from './login';
 
 export class Routes {
 	api: TTTAPI;
 	router: Router;
 	playerController: PlayerController;
 	lobbyController: LobbyController;
+	loginController: LoginController;
 
 	constructor(api: TTTAPI) {
 		this.api = api;
@@ -20,12 +22,13 @@ export class Routes {
 
 		this.playerController = new PlayerController(api);
 		this.lobbyController = new LobbyController(api);
-		this.createRoutes();
+		this.loginController = new LoginController(api);
 	}
 
 	createRoutes(): void {
 		this.playerController.applyRoutes(this.router);
 		this.lobbyController.applyRoutes(this.router);
+		this.loginController.applyRoutes(this.router);
 	}
 
 	getRouter(): Router {
