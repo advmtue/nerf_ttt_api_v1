@@ -30,7 +30,7 @@ export class AuthController extends Controller {
 
 		if (players.rows.length === 1) {
 			const payload = {
-				id: players.rows[0]
+				id: players.rows[0].id
 			};
 
 			authInfo.token = jwt.sign(
