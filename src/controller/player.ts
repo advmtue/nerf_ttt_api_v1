@@ -17,8 +17,8 @@ export class PlayerController extends Controller {
 	/* Get the public profile information of a given playerID */
 	getPlayerProfile = async (request: Request, response: Response): Promise<void> => {
 		const numberId = request.params.playerId;
-		const player = await this.api.postgresClient.query('SELECT * FROM player_public WHERE id = $1;', [numberId]);
-		response.send(player.rows);
+		const player = await this.api.postgresClient.query('SELECT * FROM player_profile WHERE id = $1;', [numberId]);
+		response.send(player.rows[0] || []);
 	};
 }
 

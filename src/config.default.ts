@@ -20,3 +20,11 @@ export const cryptoConfig = {
 	digest: 'sha1'
 };
 
+/* JWT Signing Config */
+export const jwtConfig = {
+	secret: 'somethingreallylongthatyoushoulddefinitelychange',
+	options: {
+		algorithm: 'HS256',
+		expiresIn: '72h'
+	}
+};
