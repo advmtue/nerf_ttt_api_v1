@@ -1,7 +1,7 @@
 import {Request, Response, Router} from 'express';
 import * as jwt from 'jsonwebtoken';
 import {Controller} from './_controller';
-import {createSessionKey, hashPassword} from '../lib/crypto';
+import {hashPassword} from '../lib/crypto';
 import {jwtConfig} from '../config';
 
 export class AuthController extends Controller {
@@ -23,10 +23,10 @@ export class AuthController extends Controller {
 			[request.body.username, hashpwd]
 		);
 
-		let authInfo = {
+		const authInfo = {
 			success: false,
 			token: ''
-		}
+		};
 
 		if (players.rows.length === 1) {
 			const payload = {

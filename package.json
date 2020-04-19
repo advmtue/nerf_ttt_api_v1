@@ -24,9 +24,10 @@
     "gulp": "^4.0.2",
     "gulp-clean": "^0.4.0",
     "gulp-typescript": "^6.0.0-alpha.1",
+    "prettier": "^2.0.4",
     "ts-loader": "^6.2.2",
     "typescript": "^3.8.3",
-    "xo": "^0.28.3"
+    "xo": "^0.29.1"
   },
   "dependencies": {
     "@types/cookie-parser": "^1.4.2",

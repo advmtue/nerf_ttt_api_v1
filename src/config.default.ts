@@ -24,7 +24,6 @@ export const cryptoConfig = {
 export const jwtConfig = {
 	secret: 'somethingreallylongthatyoushoulddefinitelychange',
 	options: {
-		algorithm: 'HS256',
 		expiresIn: '72h'
 	}
 };
