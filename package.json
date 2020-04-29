@@ -2,7 +2,7 @@
   "name": "nerf-ttt-api",
   "version": "1.0.0",
   "description": "API endpoints for Nerf TTT",
-  "main": "dist/index.js",
+  "main": "dist/src/index.js",
   "scripts": {
     "test": "xo",
     "dev": "docker-compose -f docker-compose-dev.yml up --build",

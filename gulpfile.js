@@ -23,6 +23,7 @@ function build() {
 // Watch source directory for changes
 exports.watch = function () {
 	watch('src/**/*.ts', build);
+	watch('models/**/*.ts', build);
 };
 
 // Default export ('gulp' in cmdline)

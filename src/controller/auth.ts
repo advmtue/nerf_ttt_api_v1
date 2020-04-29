@@ -5,13 +5,52 @@ import {hashPassword} from '../lib/crypto';
 import {jwtConfig} from '../config';
 
 import {Player} from '../../models/player';
-import {LoginForm} from '../../models/auth';
+import {LoginForm, ChangePasswordForm} from '../../models/auth';
 
 export class AuthController extends Controller {
 	applyRoutes(router: Router): void {
 		router.post('/login', this.playerPostLogin);
-		router.get('/logout', this.playerLogout);
+		router.post('/passwordreset', [this.checkAuth, this.playerChangePassword]);
 	}
+
+	playerChangePassword = async (request: Request, response: Response): Promise<void> => {
+		console.log('POST /passwordreset');
+
+		// Add header check so typescript doesn't complain
+		if (!request.headers.authorization) {
+			response.status(403);
+			return;
+		}
+
+		const changePasswordInfo: ChangePasswordForm = request.body;
+
+		// Get userId from jwt
+		const jwtInfo = jwt.verify(
+			request.headers.authorization,
+			jwtConfig.secret
+		) as {id: number};
+
+		// Hash the new password
+		const curpwHash = await hashPassword(changePasswordInfo.currentPassword);
+		const pwHash = await hashPassword(changePasswordInfo.newPassword);
+		console.log(pwHash);
+
+		const responsePayload = {
+			success: false
+		};
+
+		const updateQuery = await this.api.postgresClient.query(
+			'UPDATE "player" SET "password_reset" = false, "password" = $1 WHERE "id" = $2 AND "password" = $3',
+			[pwHash, jwtInfo.id, curpwHash]
+		);
+
+		// Current password matched, and a row was updated
+		if (updateQuery.rowCount === 1) {
+			responsePayload.success = true;
+		}
+
+		response.send(responsePayload);
+	};
 
 	/* Player attempts to login */
 	playerPostLogin = async (request: Request, response: Response): Promise<void> => {
@@ -23,7 +62,7 @@ export class AuthController extends Controller {
 
 		// Retrieve player listing
 		const playerQuery = await this.api.postgresClient.query(
-			'SELECT "id" FROM "player" WHERE "username"=$1 and "password"=$2;',
+			'SELECT "id", "password_reset" FROM "player" WHERE "username"=$1 and "password"=$2;',
 			[loginInfo.username, hashpwd]
 		);
 
@@ -31,7 +70,8 @@ export class AuthController extends Controller {
 
 		const authInfo = {
 			success: false,
-			token: ''
+			token: '',
+			passwordReset: false
 		};
 
 		if (players.length === 1) {
@@ -46,14 +86,22 @@ export class AuthController extends Controller {
 			);
 
 			authInfo.success = true;
+			authInfo.passwordReset = players[0].password_reset;
 		}
 
 		response.send(authInfo);
 	};
 
-	/* Log a player out, invalidating session and deleting cookies */
-	playerLogout = async (request: Request, response: Response): Promise<void> => {
-		response.clearCookie('test');
-		response.send(1);
+	/* Middleware that only allows for authenticated users to view a path */
+	checkAuth = async (request: Request, response: Response, next: any): Promise<void> => {
+		if (request.headers.authorization) {
+			try {
+				jwt.verify(request.headers.authorization, jwtConfig.secret);
+				next();
+			} catch {
+				response.status(403);
+			}
+		}
 	};
+
 }
