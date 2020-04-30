@@ -5,6 +5,7 @@ import {TTTAPI} from '..';
 import {PlayerController} from './player';
 import {LobbyController} from './lobby';
 import {AuthController} from './auth';
+import {GroupController} from './group';
 
 export class Routes {
 	api: TTTAPI;
@@ -12,6 +13,7 @@ export class Routes {
 	playerController: PlayerController;
 	lobbyController: LobbyController;
 	authController: AuthController;
+	groupController: GroupController;
 
 	constructor(api: TTTAPI) {
 		this.api = api;
@@ -23,12 +25,14 @@ export class Routes {
 		this.playerController = new PlayerController(api);
 		this.lobbyController = new LobbyController(api);
 		this.authController = new AuthController(api);
+		this.groupController = new GroupController(api);
 	}
 
 	createRoutes(): void {
 		this.playerController.applyRoutes(this.router);
 		this.lobbyController.applyRoutes(this.router);
 		this.authController.applyRoutes(this.router);
+		this.groupController.applyRoutes(this.router);
 	}
 
 	getRouter(): Router {
