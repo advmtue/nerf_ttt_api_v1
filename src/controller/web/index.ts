@@ -1,5 +1,5 @@
 import {Router} from 'express';
-import {TTTAPI} from '..';
+import {TTTAPI} from '../..';
 
 // Api endpoints
 import {PlayerController} from './player';

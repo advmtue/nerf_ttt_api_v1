@@ -1,16 +1,15 @@
 import {Request, Response, Router} from 'express';
-import * as jwt from 'jsonwebtoken';
+import * as jwtlib from '../../lib/jwt';
 import {Controller} from './_controller';
-import {hashPassword} from '../lib/crypto';
-import {jwtConfig} from '../config';
+import {hashPassword} from '../../lib/crypto';
+import {db} from '../../lib/db';
 
-import {Player} from '../../models/player';
-import {LoginForm, ChangePasswordForm} from '../../models/auth';
+import {LoginForm, ChangePasswordForm} from '../../../models/auth';
 
 export class AuthController extends Controller {
 	applyRoutes(router: Router): void {
 		router.post('/login', this.playerPostLogin);
-		router.post('/passwordreset', [this.checkAuth, this.playerChangePassword]);
+		router.post('/passwordreset', [checkAuth, this.playerChangePassword]);
 	}
 
 	playerChangePassword = async (request: Request, response: Response): Promise<void> => {
@@ -25,10 +24,7 @@ export class AuthController extends Controller {
 		const changePasswordInfo: ChangePasswordForm = request.body;
 
 		// Get userId from jwt
-		const jwtInfo = jwt.verify(
-			request.headers.authorization,
-			jwtConfig.secret
-		) as {id: number};
+		const jwtInfo = jwtlib.decode(request.headers.authorization) as {id: number};
 
 		// Hash the new password
 		const curpwHash = await hashPassword(changePasswordInfo.currentPassword);
@@ -39,15 +35,10 @@ export class AuthController extends Controller {
 			success: false
 		};
 
-		const updateQuery = await this.api.postgresClient.query(
-			'UPDATE "player" SET "password_reset" = false, "password" = $1 WHERE "id" = $2 AND "password" = $3',
-			[pwHash, jwtInfo.id, curpwHash]
-		);
+		const pwUpdateStatus = await db.setPlayerPassword(pwHash, jwtInfo.id, curpwHash);
 
 		// Current password matched, and a row was updated
-		if (updateQuery.rowCount === 1) {
-			responsePayload.success = true;
-		}
+		responsePayload.success = pwUpdateStatus;
 
 		response.send(responsePayload);
 	};
@@ -61,12 +52,7 @@ export class AuthController extends Controller {
 		const hashpwd = await hashPassword(loginInfo.password);
 
 		// Retrieve player listing
-		const playerQuery = await this.api.postgresClient.query(
-			'SELECT "id", "password_reset" FROM "player" WHERE "username"=$1 and "password"=$2;',
-			[loginInfo.username, hashpwd]
-		);
-
-		const players: Player[] = playerQuery.rows;
+		const players = await db.getPlayerLogin(loginInfo.username, hashpwd);
 
 		const authInfo = {
 			success: false,
@@ -76,14 +62,11 @@ export class AuthController extends Controller {
 
 		if (players.length === 1) {
 			const payload = {
-				id: players[0].id
+				id: players[0].id,
+				group: players[0].group
 			};
 
-			authInfo.token = jwt.sign(
-				payload,
-				jwtConfig.secret,
-				jwtConfig.options
-			);
+			authInfo.token = jwtlib.createToken(payload);
 
 			authInfo.success = true;
 			authInfo.passwordReset = players[0].password_reset;
@@ -91,17 +74,19 @@ export class AuthController extends Controller {
 
 		response.send(authInfo);
 	};
-
-	/* Middleware that only allows for authenticated users to view a path */
-	checkAuth = async (request: Request, response: Response, next: any): Promise<void> => {
-		if (request.headers.authorization) {
-			try {
-				jwt.verify(request.headers.authorization, jwtConfig.secret);
-				next();
-			} catch {
-				response.status(403);
-			}
-		}
-	};
-
 }
+
+/* Middleware that only allows for authenticated users to view a path */
+export const checkAuth = async (request: Request, response: Response, next: any): Promise<void> => {
+	if (request.headers.authorization) {
+		try {
+			jwtlib.decode(request.headers.authorization);
+			next();
+			return;
+		} catch {
+			console.log('Auth middleware failed authorization check');
+			response.send(403);
+		}
+	}
+	response.send(403);
+};

@@ -1,4 +1,4 @@
-import {TTTAPI} from '..';
+import {TTTAPI} from '../..';
 
 export class Controller {
 	api: TTTAPI;
