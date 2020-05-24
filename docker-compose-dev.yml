@@ -9,7 +9,6 @@ services:
             - '8080:3000'
         volumes:
             - ./src:/usr/src/app/src
-            - ./models:/usr/src/app/models
         networks:
             - nerf_ttt
 

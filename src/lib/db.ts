@@ -1,7 +1,7 @@
 import {Client} from 'pg';
 import {postgresConfig} from '../config';
-import {Player, PlayerProfile} from '../../models/player';
-import {Lobby} from '../../models/lobby';
+import {PlayerLogin, PlayerProfile} from '../models/player';
+import {Lobby} from '../models/lobby';
 
 class DBLib {
 	client: Client;
@@ -31,27 +31,31 @@ class DBLib {
 	/*
 	   Get a list of players who are participating in a lobby
 	 */
-	async getLobbyPlayers(lobbyId: number | string) {
+	async getLobbyPlayers(lobbyId: number | string): Promise<PlayerProfile[]> {
 		const query = await this.client.query(
 			'SELECT * FROM lobby_player_public WHERE lobby_id = $1',
 			[lobbyId]
 		);
 
-		const players: Player[] = query.rows;
-		return players;
+		return query.rows as PlayerProfile[];
 	}
 	/*
 	   Get any players whose login credentials matches the provided params
 	   Can return an empty row, representing failed login
 	 */
-	async getPlayerLogin(username: string, pw: string) {
+	async getPlayerLogin(username: string, pw: string): Promise<PlayerLogin> {
 		const query = await this.client.query(
 			'SELECT "id", "password_reset", "group" FROM "player" WHERE "username"=$1 and "password"=$2;',
 			[username, pw]
 		);
 
-		const players: Player[] = query.rows;
-		return players;
+		// Only grab the first player
+		if (query.rows.length !== 1) {
+			throw new Error("PlayerLogin query didn\'t return 1 row");
+		}
+
+		// Return the player
+		return query.rows[0] as PlayerLogin;
 	}
 
 	/*
@@ -104,9 +108,7 @@ class DBLib {
 	 */
 	async getPlayerList() {
 		const q = await this.client.query('SELECT * FROM player_public')
-		const players: Player[] = q.rows;
-
-		return players;
+		return q.rows as PlayerProfile[];
 	}
 
 	/*

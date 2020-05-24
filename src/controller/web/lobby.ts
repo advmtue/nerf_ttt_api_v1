@@ -1,9 +1,10 @@
 import {Request, Response, Router} from 'express';
 import {Controller} from './_controller';
 import {db} from '../../lib/db';
-import {checkAuth} from './auth';
 import * as jwtlib from '../../lib/jwt';
-import {Player} from '../../../models/player';
+import {checkAuth} from './auth';
+import {Player, PlayerProfile} from '../../models/player';
+import {Lobby} from '../../models/lobby';
 import {requestGetPlayer} from '../../lib/web';
 
 export class LobbyController extends Controller {
@@ -18,10 +19,14 @@ export class LobbyController extends Controller {
 		router.get('lobby/:lobbyId/leave', [checkAuth, this.leaveLobby]);
 	}
 
+	leaveLobby = async (request: Request, response: Response): Promise<void> => {
+		response.send(false);
+	}
+
 	/* Player attempts to join a lobby */
 	joinLobby = async (request: Request, response: Response): Promise<void> => {
 		// Get player information
-		let player: Player = undefined;
+		let player: PlayerProfile;
 		try {
 			player = await requestGetPlayer(request);
 		} catch {
@@ -33,7 +38,7 @@ export class LobbyController extends Controller {
 		   Get the lobby information so that we can ensure
 		   that the lobby hasn't already started
 		 */
-		let lobby: Lobby = undefined;
+		let lobby: Lobby | undefined = undefined;
 		try {
 			lobby = await db.getLobby(request.params.lobbyId);
 		} catch {
@@ -42,7 +47,7 @@ export class LobbyController extends Controller {
 		}
 
 		// If the lobby is not waiting for players, return forbidden
-		if (lobby.lobby_status !== 'WAITING') {
+		if (lobby === null || lobby.lobby_status !== 'WAITING') {
 			response.send(403);
 			return;
 		}
@@ -82,11 +87,15 @@ export class LobbyController extends Controller {
 
 		const lobbyName = request.body.name;
 
-		// Get the user trying to make the lobby
-		const user = jwtlib.decode(request.headers.authorization) as Player;
+		// Get the user
+		const user = request.player;
+		if (!user) {
+			response.send(403);
+			return;
+		}
 
 		// Ensure they have permissions
-		const hasPermission = await db.groupHasPermission(user.group, 'createLobby');
+		const hasPermission = await db.groupHasPermission(user.group_name, 'createLobby');
 
 		if (!hasPermission) {
 			response.send({id: -1});
@@ -144,6 +153,4 @@ export class LobbyController extends Controller {
 			response.send(false);
 		}
 	};
-
-
 }

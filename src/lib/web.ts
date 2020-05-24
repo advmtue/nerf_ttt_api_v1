@@ -1,28 +1,26 @@
-import { Request } from 'express';
-import { decode } from './jwt';
-import { PlayerProfile } from '../../models/player';
-import { db } from './db';
+import {Request} from 'express';
+import {decode} from './jwt';
+import {PlayerProfile} from '../models/player';
+import {db} from './db';
+import {UserInfoJwt} from '../models/jwt';
 
-export async function requestGetPlayer(request: Request): Promise<PlayerProfile | null> {
+export async function requestGetPlayer(request: Request): Promise<PlayerProfile> {
 	// Ensure that auth tokens have actually been passed
 	if (!request.headers.authorization) {
-		return null;
+		throw new Error('Missing auth header');
 	}
 
 	// Try to decode the auth token
-	let userInfo: {id: number | undefined} = {id: undefined};
+	let userInfo: UserInfoJwt;
 	try {
-		userInfo = decode(request.headers.authorization) as {id: number};
+		userInfo = decode(request.headers.authorization);
 	} catch (err) {
-		console.log('Error decoding user auth token');
-		console.log(err);
-		return null;
+		throw new Error('Couldn\'t decode player auth token');
 	}
 
 	// Ensure that is is a valid key on the token
 	if (userInfo.id === undefined) {
-		console.log('No key attached to user id');
-		return null;
+		throw new Error('No key attached to user id');
 	}
 
 	// Pull player profile
@@ -31,7 +29,7 @@ export async function requestGetPlayer(request: Request): Promise<PlayerProfile 
 		player = await db.getPlayerProfile(userInfo.id);
 	} catch (err) {
 		console.log(err);
-		return null;
+		throw new Error('Couldn\'t pull player profile from database');
 	}
 
 	return player;

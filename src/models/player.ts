@@ -1,7 +1,10 @@
 export interface Player {
 	id: number;
-	password_reset: boolean;
 	group: string;
+}
+
+export interface PlayerLogin extends Player {
+	password_reset: boolean;
 }
 
 export interface PlayerProfile {

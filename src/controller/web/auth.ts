@@ -1,10 +1,15 @@
 import {Request, Response, Router} from 'express';
-import * as jwtlib from '../../lib/jwt';
 import {Controller} from './_controller';
+
+// Lib
 import {hashPassword} from '../../lib/crypto';
 import {db} from '../../lib/db';
+import * as jwtlib from '../../lib/jwt';
 
-import {LoginForm, ChangePasswordForm} from '../../../models/auth';
+// Model
+import {LoginForm, ChangePasswordForm} from '../../models/auth';
+import {PlayerLogin} from '../../models/player';
+import {UserInfoJwt} from '../../models/jwt';
 
 export class AuthController extends Controller {
 	applyRoutes(router: Router): void {
@@ -51,26 +56,33 @@ export class AuthController extends Controller {
 		// Hash the user password
 		const hashpwd = await hashPassword(loginInfo.password);
 
-		// Retrieve player listing
-		const players = await db.getPlayerLogin(loginInfo.username, hashpwd);
-
+		// Setup the payload for returning to the user
 		const authInfo = {
 			success: false,
 			token: '',
 			passwordReset: false
 		};
 
-		if (players.length === 1) {
-			const payload = {
-				id: players[0].id,
-				group: players[0].group
-			};
-
-			authInfo.token = jwtlib.createToken(payload);
-
-			authInfo.success = true;
-			authInfo.passwordReset = players[0].password_reset;
+		// Retrieve player listing
+		let player: PlayerLogin;
+		try {
+			player = await db.getPlayerLogin(loginInfo.username, hashpwd);
+		} catch {
+			// Login failed
+			response.send(authInfo);
+			return;
 		}
+
+		// Payload for encoding inside the jwt
+		const payload: UserInfoJwt = {
+			id: player.id,
+			group: player.group
+		};
+
+		// Assign values
+		authInfo.token = jwtlib.createToken(payload);
+		authInfo.success = true;
+		authInfo.passwordReset = player.password_reset;
 
 		response.send(authInfo);
 	};
@@ -78,15 +90,31 @@ export class AuthController extends Controller {
 
 /* Middleware that only allows for authenticated users to view a path */
 export const checkAuth = async (request: Request, response: Response, next: any): Promise<void> => {
-	if (request.headers.authorization) {
-		try {
-			jwtlib.decode(request.headers.authorization);
-			next();
-			return;
-		} catch {
-			console.log('Auth middleware failed authorization check');
-			response.send(403);
-		}
+	// Ensure auth headers have actually been sent
+	if (!request.headers.authorization) {
+		response.send(403);
+		return;
 	}
-	response.send(403);
+
+	// Assign the userJwt to the request
+	let userJwt;
+	try {
+		userJwt = jwtlib.decode(request.headers.authorization);
+		request.userJwt = userJwt;
+	} catch {
+		console.log('Auth middleware failed authorization check');
+		response.send(403);
+		return;
+	}
+
+	// Assign the player to the request
+	try {
+		request.player = await db.getPlayerProfile(userJwt.id);
+	} catch {
+		console.log('Auth middleware failed to pull player profile');
+		response.send(403);
+		return;
+	}
+
+	next();
 };
