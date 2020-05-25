@@ -6,6 +6,7 @@ export function applySocketRoutes(io: SocketIO.Server) {
 
 function onConnect(socket: SocketIO.Socket) {
 	socket.on('getLobbyList', getLobbyList);
+	socket.on('joinLobby', joinLobby);
 }
 
 async function getLobbyList(this: SocketIO.Socket, data: any) {
@@ -13,4 +14,9 @@ async function getLobbyList(this: SocketIO.Socket, data: any) {
 	this.emit('getLobbyList', lobbies);
 	// Join the lobby update group
 	this.join('lobbyListUpdate');
+}
+
+async function joinLobby(this: SocketIO.Socket, lobbyId: number) {
+	console.log(`Socket joined lobby ${lobbyId}`);
+	this.join(`lobby ${lobbyId}`);
 }

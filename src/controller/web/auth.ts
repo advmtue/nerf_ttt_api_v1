@@ -18,8 +18,6 @@ export class AuthController extends Controller {
 	}
 
 	playerChangePassword = async (request: Request, response: Response): Promise<void> => {
-		console.log('POST /passwordreset');
-
 		// Add header check so typescript doesn't complain
 		if (!request.headers.authorization) {
 			response.status(403);
@@ -29,7 +27,7 @@ export class AuthController extends Controller {
 		const changePasswordInfo: ChangePasswordForm = request.body;
 
 		// Get userId from jwt
-		const jwtInfo = jwtlib.decode(request.headers.authorization) as {id: number};
+		const jwtInfo = jwtlib.decode(request.headers.authorization);
 
 		// Hash the new password
 		const curpwHash = await hashPassword(changePasswordInfo.currentPassword);
@@ -50,7 +48,6 @@ export class AuthController extends Controller {
 
 	/* Player attempts to login */
 	playerPostLogin = async (request: Request, response: Response): Promise<void> => {
-		console.log('POST /login');
 		const loginInfo: LoginForm = request.body;
 
 		// Hash the user password

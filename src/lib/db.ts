@@ -81,8 +81,7 @@ class DBLib {
 	 */
 	async getLobbyList() {
 		const q = await this.client.query('SELECT * FROM lobby_public WHERE lobby_status = \'WAITING\'');
-		const lobbies: Lobby[] = q.rows;
-		return lobbies;
+		return q.rows as Lobby[];
 	}
 
 	/*
@@ -99,8 +98,7 @@ class DBLib {
 			throw new Error('Lobby query returned 0 rows');
 		}
 
-		const lobby: Lobby = q.rows[0];
-		return lobby;
+		return q.rows[0] as Lobby;
 	}
 
 	/*
@@ -140,20 +138,20 @@ class DBLib {
 
 		// Fail if nothing happened
 		if (q.rowCount !== 1) {
-			return {id: -1};
+			throw new Error('Failed to create new lobby');
 		}
 
+		// Pull the new lobby
 		const q2 = await this.client.query(
 			'SELECT * FROM lobby_public WHERE owner_id = $1 and name = $2 LIMIT 1',
 			[ownerId, name]
 		)
 
 		if (q2.rowCount !== 1) {
-			return {id: -1};
+			throw new Error('Failed to find new lobby');
 		}
 
-		const lobby: Lobby = q2.rows[0];
-		return lobby;
+		return q2.rows[0] as Lobby;
 	}
 
 	async closeLobby(lobbyId: number, byAdmin: boolean) {
@@ -215,10 +213,23 @@ class DBLib {
 				[lobbyId, playerId]
 			)
 
-			console.log('Rows for joining player', q.rows);
 			return true;
 		} catch {
 			// Failed unique constraint
+			return false;
+		}
+	}
+
+	// Remove a player from a lobby.
+	async lobbyRemovePlayer(lobbyId: number | string, playerId: number) {
+		try {
+			const q = await this.client.query(
+				'DELETE FROM lobby_player WHERE lobby_id = $1 AND player_id = $2',
+				[lobbyId, playerId]
+			);
+
+			return true;
+		} catch {
 			return false;
 		}
 	}

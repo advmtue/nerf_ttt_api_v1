@@ -12,3 +12,8 @@ export interface Lobby {
 	owner_group_emoji: string;
 	player_count: number;
 }
+
+export interface CreateLobbyResponse {
+	success: boolean;
+	lobby: Lobby | null;
+}
