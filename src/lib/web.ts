@@ -1,36 +1,54 @@
-import {Request} from 'express';
-import {decode} from './jwt';
-import {PlayerProfile} from '../models/player';
-import {db} from './db';
-import {UserInfoJwt} from '../models/jwt';
+// Modules
+import { Request, Response } from 'express';
 
-export async function requestGetPlayer(request: Request): Promise<PlayerProfile> {
-	// Ensure that auth tokens have actually been passed
+// Libs
+import { db } from './db';
+import * as jwtlib from './jwt';
+
+// Interfaces
+import { PlayerProfile } from '../models/player';
+
+/**
+ * Express middleware which restricts only authenticated users to view a path
+ *
+ * @param request Express request
+ * @param response Express response
+ * @param next Express next
+ */
+export async function checkAuth(request: Request, response: Response, next: any) {
+	// Ensure auth headers have actually been sent
 	if (!request.headers.authorization) {
-		throw new Error('Missing auth header');
+		response.sendStatus(403);
+		return;
 	}
 
-	// Try to decode the auth token
-	let userInfo: UserInfoJwt;
+	// Decode the passed auth token into a UserInfoJwt
+	let userJwt;
 	try {
-		userInfo = decode(request.headers.authorization);
-	} catch (err) {
-		throw new Error('Couldn\'t decode player auth token');
-	}
-
-	// Ensure that is is a valid key on the token
-	if (userInfo.id === undefined) {
-		throw new Error('No key attached to user id');
-	}
-
-	// Pull player profile
-	let player: PlayerProfile;
-	try {
-		player = await db.getPlayerProfile(userInfo.id);
+		userJwt = jwtlib.decode(request.headers.authorization);
 	} catch (err) {
 		console.log(err);
-		throw new Error('Couldn\'t pull player profile from database');
+		response.sendStatus(403);
+		return;
 	}
 
-	return player;
+	// Pull a user and assign it to the request context
+	let player: PlayerProfile | null;
+	try {
+		player = await db.getPlayerProfile(userJwt.id);
+	} catch (err) {
+		// Failed to pull user
+		console.log(err);
+		response.sendStatus(403);
+		return;
+	}
+
+	// Assign parts to the request
+	if (player !== null) {
+		request.player = player;
+		request.userJwt = userJwt;
+	}
+
+	next();
 }
+export default checkAuth;

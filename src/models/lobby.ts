@@ -1,3 +1,6 @@
+/**
+ * Entire lobby structure from the database
+ */
 export interface Lobby {
 	id: number;
 	owner_id: number;
@@ -13,6 +16,9 @@ export interface Lobby {
 	player_count: number;
 }
 
+/**
+ * Reponse when user attempts to create a lobby
+ */
 export interface CreateLobbyResponse {
 	success: boolean;
 	lobby: Lobby | null;

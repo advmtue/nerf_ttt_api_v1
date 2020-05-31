@@ -3,27 +3,37 @@
    copy this file to src/config.js and modify the clone.
  */
 
-/* PostgreSQL Client Configuration */
+/**
+  * Postgres Connection information
+  */
 export const postgresConfig = {
 	user: 'username',
 	password: 'password',
 	database: 'nerf_ttt',
 	port: 5432,
-	host: 'somehost.com'
+	host: 'somehost.com',
 };
 
-/* Cryto Library Config */
+/**
+ * Configuration for hashing passwords
+ *
+ * You should change the salt (don't lose it!)
+ */
 export const cryptoConfig = {
 	salt: 'somesalt',
 	iterations: 100000,
 	keylen: 64,
-	digest: 'sha1'
+	digest: 'sha1',
 };
 
-/* JWT Signing Config */
+/**
+ * Configuration for signing jwts
+ *
+ * You should change the secret (don't lose it!)
+ */
 export const jwtConfig = {
 	secret: 'somethingreallylongthatyoushoulddefinitelychange',
 	options: {
-		expiresIn: '72h'
-	}
+		expiresIn: '72h',
+	},
 };

@@ -1,12 +1,21 @@
+/**
+ * Most basic information for a player
+ */
 export interface Player {
 	id: number;
 	group: string;
 }
 
+/**
+ * Player login response
+ */
 export interface PlayerLogin extends Player {
 	password_reset: boolean;
 }
 
+/**
+ * Full public player profile
+ */
 export interface PlayerProfile {
 	id: number;
 	first_name: string,
@@ -16,4 +25,3 @@ export interface PlayerProfile {
 	group_colour: string;
 	group_emoji: string;
 }
-

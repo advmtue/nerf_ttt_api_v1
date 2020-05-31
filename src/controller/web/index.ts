@@ -1,42 +1,24 @@
-import {Router} from 'express';
-import {TTTAPI} from '../..';
+import { Router } from 'express';
 
-// Api endpoints
-import {PlayerController} from './player';
-import {LobbyController} from './lobby';
-import {AuthController} from './auth';
-import {GroupController} from './group';
+// Controllers that define endpoints
+import * as playerController from './player';
+import * as lobbyController from './lobby';
+import * as authController from './auth';
+import * as groupController from './group';
 
-export class Routes {
-	api: TTTAPI;
-	router: Router;
-	playerController: PlayerController;
-	lobbyController: LobbyController;
-	authController: AuthController;
-	groupController: GroupController;
+/**
+ * Create a router, apply controller endpoints and return it
+ *
+ * @returns A new express router with endpoints specified
+ */
+export function createRouter(): Router {
+	const router = Router();
 
-	constructor(api: TTTAPI) {
-		this.api = api;
+	playerController.applyRoutes(router);
+	lobbyController.applyRoutes(router);
+	authController.applyRoutes(router);
+	groupController.applyRoutes(router);
 
-		// Disable linting for the next line, since it's an expressjs problem
-		// eslint-disable-next-line new-cap
-		this.router = Router();
-
-		this.playerController = new PlayerController(api);
-		this.lobbyController = new LobbyController(api);
-		this.authController = new AuthController(api);
-		this.groupController = new GroupController(api);
-	}
-
-	createRoutes(): void {
-		this.playerController.applyRoutes(this.router);
-		this.lobbyController.applyRoutes(this.router);
-		this.authController.applyRoutes(this.router);
-		this.groupController.applyRoutes(this.router);
-	}
-
-	getRouter(): Router {
-		return this.router;
-	}
+	return router;
 }
-
+export default createRouter;

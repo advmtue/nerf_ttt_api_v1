@@ -1,204 +1,296 @@
-import {Request, Response, Router} from 'express';
-import {Controller} from './_controller';
-import {db} from '../../lib/db';
-import * as jwtlib from '../../lib/jwt';
-import {checkAuth} from './auth';
-import {Player, PlayerProfile} from '../../models/player';
-import {Lobby, CreateLobbyResponse} from '../../models/lobby';
-import {requestGetPlayer} from '../../lib/web';
+// Modules
+import { Request, Response, Router } from 'express';
 
-export class LobbyController extends Controller {
-	applyRoutes(router: Router): void {
-		router.get('/lobby', this.getLobbyList);
-		router.get('/lobby/:lobbyId', this.getLobby);
-		router.get('/lobby/:lobbyId/players', this.getLobbyPlayers);
-		router.post('/lobby', [checkAuth, this.createLobby]);
-		router.delete('/lobby/:lobbyId', [checkAuth, this.deleteLobby]);
-		router.delete('/lobby/:lobbyId/admin', [checkAuth, this.deleteLobby]);
-		router.get('/lobby/:lobbyId/join', [checkAuth, this.joinLobby]);
-		router.get('/lobby/:lobbyId/leave', [checkAuth, this.leaveLobby]);
+// Libs
+import { db } from '../../lib/db';
+import { io } from '../../lib/io';
+import { checkAuth } from '../../lib/web';
+
+// Interfaces
+import { Lobby, CreateLobbyResponse } from '../../models/lobby';
+
+/**
+ * HTTP endpoint for a player requesting to leave a lobby
+ * The converse of joinLobby()
+ *
+ * @param request express request object
+ * @param response express response object
+ */
+async function leaveLobby(request: Request, response: Response): Promise<void> {
+	const { player } = request;
+	if (!player) {
+		response.sendStatus(403);
+		return;
 	}
 
-	leaveLobby = async (request: Request, response: Response): Promise<void> => {
-		let player = request.player;
-		if (!player) {
-			response.send(403);
-			return;
-		}
-
-		// Check lobby Status
-		let lobby: Lobby;
-		try {
-			lobby = await db.getLobby(request.params.lobbyId);
-		} catch {
-			response.send(404);
-			return;
-		}
-
-		// Ensure we are still waiting for players
-		if (lobby === null || lobby.lobby_status !== 'WAITING') {
-			response.send(403);
-			return;
-		}
-
-		// Remove the player from the lobby
-		const leftLobby = await db.lobbyRemovePlayer(lobby.id, player.id);
-
-		if (leftLobby) {
-			this.api.io.to(`lobby ${lobby.id}`).emit('playerLeave', player);
-			this.api.io.to('lobbyListUpdate').emit('lobbyPlayerChange', {lobby: lobby.id, change: -1});
-			response.send(true);
-		} else {
-			response.send(false);
-		}
+	// Pull lobby info
+	let lobby: Lobby;
+	try {
+		lobby = await db.getLobby(request.params.lobbyId);
+	} catch {
+		response.sendStatus(404);
+		return;
 	}
 
-	/* Player attempts to join a lobby */
-	joinLobby = async (request: Request, response: Response): Promise<void> => {
-		// Get player information
-		let player = request.player;
-		if (player === undefined) {
-			response.send(403);
-			return;
-		}
-
-		/*
-		   Get the lobby information so that we can ensure
-		   that the lobby hasn't already started
-		 */
-		let lobby: Lobby;
-		try {
-			lobby = await db.getLobby(request.params.lobbyId);
-		} catch {
-			response.send(403);
-			return;
-		}
-
-		// If the lobby is not waiting for players, return forbidden
-		if (lobby === null || lobby.lobby_status !== 'WAITING') {
-			response.send(403);
-			return;
-		}
-
-		// Join the lobby
-		const joinedLobby = await db.lobbyAddPlayer(lobby.id, player.id);
-
-		// If the player succesfully joined
-		if (joinedLobby) {
-			// Ack player
-			response.send(true);
-
-			// Update the socket room
-			this.api.io.to(`lobby ${lobby.id}`).emit('playerJoin', player);
-			this.api.io.to('lobbyListUpdate').emit('lobbyPlayerChange', {lobby: lobby.id, change: 1});
-		} else {
-			// Notify the player
-			response.send(false);
-		}
+	// Ensure the lobby exists and it is still in the WAITING phase
+	if (lobby === null || lobby.lobby_status !== 'WAITING') {
+		response.sendStatus(403);
+		return;
 	}
 
-	/* Get an array of players who are participating in a lobby */
-	getLobbyPlayers = async (request: Request, response: Response): Promise<void> => {
-		response.send(await db.getLobbyPlayers(request.params.lobbyId));
+	// Remove the player from the lobby
+	try {
+		await db.lobbyRemovePlayer(lobby.id, player.id);
+	} catch (error) {
+		console.log(error);
+		response.send(false);
+		return;
 	}
 
-	/* Get the lobby listing */
-	getLobbyList = async (request: Request, response: Response): Promise<void> => {
-		response.send(await db.getLobbyList());
-	};
+	// Notify the lobby room that they player has left
+	io.to(`lobby ${lobby.id}`).emit('playerLeave', player);
 
+	// Notify the lobby list viewers of a player differential
+	io.to('lobbyListUpdate').emit('lobbyPlayerChange', { lobby: lobby.id, change: -1 });
 
-	/* Get lobby by ID */
-	getLobby = async (request: Request, response: Response): Promise<void> => {
-		response.send(await db.getLobby(request.params.lobbyId));
-	};
-
-	createLobby = async (request: Request, response: Response): Promise<void> => {
-		// Ensure the body has actually been filled out
-		if (!request.body || !request.body.name) {
-			response.send({id: -1});
-		}
-
-		const lobbyName = request.body.name;
-
-		// Setup the payload for sending back to the user
-		const payload: CreateLobbyResponse = {
-			success: false,
-			lobby: null
-		};
-
-		// Get the user
-		const user = request.player;
-		if (!user) {
-			response.send(403);
-			return;
-		}
-
-		// Ensure they have permissions
-		const hasPermission = await db.groupHasPermission(user.group_name, 'createLobby');
-
-		if (!hasPermission) {
-			response.send(payload);
-			return;
-		}
-
-		// Create the lobby
-		try {
-			payload.lobby = await db.createLobby(user.id, lobbyName);
-			payload.success = true;
-
-			// Notify any listeners of an update
-			this.api.io.to('lobbyListUpdate').emit('addLobby', payload.lobby);
-		} catch (err) {
-			console.log('Failed to create new lobby.');
-			console.log(err);
-		}
-
-		// Send the lobbyId
-		response.send(payload);
-
-	};
-
-	// Admin or owner deletes the lobby
-	deleteLobby = async (request: Request, response: Response): Promise<void> => {
-		// Determine which path we are on
-		const urlEnd = request.originalUrl.split('/').pop();
-		const byAdmin = urlEnd === "admin";
-		const lobbyId = Number(request.params.lobbyId);
-
-		// Get the calling player
-		const player = request.player;
-		if (player === undefined) {
-			response.send(false);
-			return;
-		}
-
-		// Default to disallow
-		let canClose = false;
-		if (byAdmin) {
-			// Check the user's group has permission
-			canClose = await db.groupHasPermission(player.group_name, 'closeLobby');
-		} else {
-			// Check the user owns the lobby
-			try {
-				const ownerProfile = await db.lobbyGetOwnerProfile(lobbyId);
-
-				if (ownerProfile.id === player.id) {
-					canClose = true;
-				}
-			} catch (err) {
-				console.log(err);
-			}
-		}
-
-		// If the user is allowed to close the lobby, close it
-		if (canClose) {
-			await db.closeLobby(lobbyId, byAdmin);
-			this.api.io.to('lobbyListUpdate').emit('removeLobby', {id: lobbyId});
-			this.api.io.to(`lobby ${lobbyId}`).emit('lobbyClosed');
-			response.send(true);
-		} else {
-			response.send(false);
-		}
-	};
+	// Let the client know their request succeeded, and they have left the lobby
+	response.send(true);
 }
+
+/**
+ * HTTP endpoint for when a player tries to join a lobby
+ * The converse of leaveLobby()
+ *
+ * @param request Express request object
+ * @param response Express response object
+ */
+async function joinLobby(request: Request, response: Response): Promise<void> {
+	// Get player information
+	const { player } = request;
+	if (player === undefined) {
+		response.sendStatus(403);
+		return;
+	}
+
+	// Pull lobby information
+	let lobby: Lobby;
+	try {
+		lobby = await db.getLobby(request.params.lobbyId);
+	} catch {
+		response.sendStatus(403);
+		return;
+	}
+
+	// Ensure the lobby exists and that it is in the WAITING phase
+	if (lobby === null || lobby.lobby_status !== 'WAITING') {
+		response.sendStatus(403);
+		return;
+	}
+
+	// Attempt to join the lobby
+	try {
+		await db.lobbyAddPlayer(lobby.id, player.id);
+	} catch (error) {
+		// Failed to join (internal server error?)
+		// Send false status to player
+		response.send(false);
+		return;
+	}
+
+	// Ack player
+	response.send(true);
+
+	// Update the lobby room with the new player
+	io.to(`lobby ${lobby.id}`).emit('playerJoin', player);
+
+	// Update the lobby list viewers with the player change diff
+	io.to('lobbyListUpdate').emit('lobbyPlayerChange', { lobby: lobby.id, change: 1 });
+}
+
+/**
+ * HTTP endpoint for pulling lobby player listing
+ *
+ * @param request Express request object
+ * @param response Express response object
+ */
+async function getLobbyPlayers(request: Request, response: Response): Promise<void> {
+	try {
+		response.send(await db.getLobbyPlayers(request.params.lobbyId));
+	} catch (error) {
+		// Failed for unknown reason
+		console.log(error);
+		response.sendStatus(500);
+	}
+}
+
+/**
+ * HTTP endpoint for pulling the list of lobbies
+ *
+ * @param request Express request object
+ * @param response Express response object
+ */
+async function getLobbyList(request: Request, response: Response): Promise<void> {
+	try {
+		response.send(await db.getLobbyList());
+	} catch (error) {
+		// Internal server error
+		console.log(error);
+		response.sendStatus(500);
+	}
+}
+
+/**
+ * HTTP endpoint for pulling an individual lobby
+ * @param request Express request object
+ * @param response Express response object
+ */
+async function getLobby(request: Request, response: Response): Promise<void> {
+	try {
+		response.send(await db.getLobby(request.params.lobbyId));
+	} catch (err) {
+		// Internal server error
+		console.log(err);
+		response.sendStatus(500);
+	}
+}
+
+/**
+ * HTTP endpoint for player attempting to create a lobby
+ *
+ * @param request Express request object
+ * @param response Express request object
+ */
+async function createLobby(request: Request, response: Response): Promise<void> {
+	// Ensure the body has actually been filled out
+	if (!request.body.name) {
+		response.sendStatus(400); // Malformed request
+		return;
+	}
+
+	const lobbyName = request.body.name;
+
+	// Setup the payload for sending back to the user
+	const payload: CreateLobbyResponse = {
+		success: false,
+		lobby: null,
+	};
+
+	// Pull the userid
+	const user = request.player;
+	if (!user) {
+		response.sendStatus(403); // Forbidden
+		return;
+	}
+
+	// Pull user permissions
+	const hasPermission = await db.groupHasPermission(user.group_name, 'createLobby');
+
+	// If the player doesn't have permission to make the request
+	if (!hasPermission) {
+		response.sendStatus(403); // Forbidden
+		return;
+	}
+
+	// Create the lobby
+	try {
+		payload.lobby = await db.createLobby(user.id, lobbyName);
+		payload.success = true;
+
+		// Notify any listeners of an update
+		io.to('lobbyListUpdate').emit('addLobby', payload.lobby);
+	} catch (err) {
+		console.log(err);
+	}
+
+	// Send the lobbyId
+	response.send(payload);
+}
+
+/**
+ * HTTP endpoint for gamemaster/admin closing a lobby
+ *
+ * @param request Express request object
+ * @param response Express response object
+ */
+async function deleteLobby(request: Request, response: Response): Promise<void> {
+	// Determine which path we are on
+	const urlEnd = request.originalUrl.split('/').pop();
+	const byAdmin = urlEnd === 'admin';
+	const lobbyId = Number(request.params.lobbyId);
+
+	// Get the calling player
+	const { player } = request;
+	if (!player) {
+		response.sendStatus(403); // Forbidden
+		return;
+	}
+
+	// Default to not being allowed to close this lobby
+	let canClose = false;
+
+	// If this is an admin trying to close the lobby
+	if (byAdmin) {
+		// Ensure the calling player has admin permissions
+		canClose = await db.groupHasPermission(player.group_name, 'closeLobby');
+	} else {
+		// Otherwise check that the player owns the lobby
+		try {
+			const ownerProfile = await db.lobbyGetOwnerProfile(lobbyId);
+
+			if (ownerProfile.id === player.id) {
+				canClose = true;
+			}
+		} catch (err) {
+			console.log(err);
+			response.sendStatus(500); // Internal server error
+		}
+	}
+
+	// If the user is allowed to close the lobby
+	if (canClose) {
+		// Close it
+		await db.closeLobby(lobbyId, byAdmin);
+
+		// Let all lobby clients know that it has closed
+		io.to(`lobby ${lobbyId}`).emit('lobbyClosed');
+
+		// Let the lobby list viewers know the lobby has been removed
+		io.to('lobbyListUpdate').emit('removeLobby', { id: lobbyId });
+
+		// Send success to the caller
+		response.send(true);
+	} else {
+		// Send failure to the caller
+		response.send(false);
+	}
+}
+
+/**
+ * Apply lobby specific routes to an express router
+ *
+ * @param router Express Router to modify
+ */
+export function applyRoutes(router: Router): void {
+	// Get lobby list
+	router.get('/lobby', getLobbyList);
+
+	// Get single lobby
+	router.get('/lobby/:lobbyId', getLobby);
+
+	// Get players in a lobby
+	router.get('/lobby/:lobbyId/players', getLobbyPlayers);
+
+	// Create a new lobby
+	router.post('/lobby', [checkAuth, createLobby]);
+
+	// Close a lobby
+	router.delete('/lobby/:lobbyId', [checkAuth, deleteLobby]);
+	// ... as admin
+	router.delete('/lobby/:lobbyId/admin', [checkAuth, deleteLobby]);
+
+	// Join a lobby
+	router.get('/lobby/:lobbyId/join', [checkAuth, joinLobby]);
+	// Leave a lobby
+	router.get('/lobby/:lobbyId/leave', [checkAuth, leaveLobby]);
+}
+export default applyRoutes;

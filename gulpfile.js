@@ -1,5 +1,6 @@
 const gulp = require('gulp');
-const {watch, series} = gulp;
+
+const { watch, series } = gulp;
 const ts = require('gulp-typescript');
 const clean = require('gulp-clean');
 
@@ -8,8 +9,7 @@ const tsProject = ts.createProject('tsconfig.json');
 
 // Clean distribution directory
 function cleanup() {
-	console.log(__dirname);
-	return gulp.src('dist/**/*', {read: false})
+	return gulp.src('dist/**/*', { read: false })
 		.pipe(clean());
 }
 
@@ -21,7 +21,7 @@ function build() {
 }
 
 // Watch source directory for changes
-exports.watch = function () {
+exports.watch = () => {
 	watch('src/**/*.ts', build);
 };
 
