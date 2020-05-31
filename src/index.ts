@@ -11,6 +11,7 @@ import { createRouter } from './controller/web';
 // Libs
 import { db } from './lib/db';
 import * as iolib from './lib/io';
+import { logger } from './lib/logger';
 
 /**
  * TTTAPI main server instance. Houses express application and http server.
@@ -26,7 +27,7 @@ export class TTTAPI {
 	server: http.Server | undefined;
 
 	constructor(port: number) {
-		console.log('Starting TTT API server...');
+		logger.log('info', 'Starting TTT API server...');
 		this.app = express();
 		this.port = port;
 		this.server = http.createServer(this.app);
@@ -34,30 +35,34 @@ export class TTTAPI {
 
 	async start(): Promise<void> {
 		// Setup middlewares
+		logger.log('info', 'Enabling middlewares');
 		this.app.use(cors());
 		this.app.use(bodyParser.json());
 		this.app.use(bodyParser.urlencoded({ extended: false }));
 		this.app.use(cookieParser());
 
 		// Connect database
+		logger.log('info', 'Connecting database');
 		await db.connect();
 
 		// Apply HTTP routes
+		logger.log('info', 'Applying routes');
 		this.app.use(createRouter());
-		console.log('Applied Routes');
 
 		// Start a http server
+		logger.log('info', 'Starting HTTP server');
 		this.server = this.app.listen(this.port);
 
 		// Attach IO to the server (applying routes)
+		logger.log('info', 'Attaching http server to socket server');
 		iolib.init(this.server);
 
 		// Done
-		console.log(`Successfully started TTT API server on port ${this.port}`);
+		logger.log('info', `Successfully started TTT API server on port ${this.port}`);
 	}
 }
 export default TTTAPI;
 
 new TTTAPI(3000).start().then(() => {
-	console.log('Ready to handle connections.');
+	logger.log('info', 'Ready to handle connections.');
 });

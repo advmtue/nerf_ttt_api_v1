@@ -3,6 +3,7 @@ import { Request, Response } from 'express';
 
 // Libs
 import { db } from './db';
+import { logger } from './logger';
 import * as jwtlib from './jwt';
 
 // Interfaces
@@ -26,8 +27,8 @@ export async function checkAuth(request: Request, response: Response, next: any)
 	let userJwt;
 	try {
 		userJwt = jwtlib.decode(request.headers.authorization);
-	} catch (err) {
-		console.log(err);
+	} catch (error) {
+		logger.error(error);
 		response.sendStatus(403);
 		return;
 	}
@@ -36,9 +37,9 @@ export async function checkAuth(request: Request, response: Response, next: any)
 	let player: PlayerProfile | null;
 	try {
 		player = await db.getPlayerProfile(userJwt.id);
-	} catch (err) {
+	} catch (error) {
 		// Failed to pull user
-		console.log(err);
+		logger.error(error);
 		response.sendStatus(403);
 		return;
 	}

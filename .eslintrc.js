@@ -10,6 +10,5 @@ module.exports = {
 	rules: {
 		'@typescript-eslint/indent': ['error', 'tab'],
 		'no-tabs': 0,
-		'no-console': 'off',
 	},
 };

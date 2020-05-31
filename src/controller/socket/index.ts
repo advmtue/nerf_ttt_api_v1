@@ -1,4 +1,5 @@
 import { db } from '../../lib/db';
+import { logger } from '../../lib/logger';
 
 /**
  * Send the active lobby list to a socket, and add it to the lobbyListUpdate room
@@ -19,7 +20,7 @@ async function getLobbyList(this: SocketIO.Socket) {
  * @param lobbyId Lobby to be joined
  */
 async function joinLobby(this: SocketIO.Socket, lobbyId: number) {
-	console.log(`Socket joined lobby ${lobbyId}`);
+	logger.log('info', `Socket joined lobby ${lobbyId}`);
 	this.join(`lobby ${lobbyId}`);
 }
 

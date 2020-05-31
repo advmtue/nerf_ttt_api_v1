@@ -5,6 +5,7 @@ import { Request, Response, Router } from 'express';
 import { db } from '../../lib/db';
 import { io } from '../../lib/io';
 import { checkAuth } from '../../lib/web';
+import { logger } from '../../lib/logger';
 
 // Interfaces
 import { Lobby, CreateLobbyResponse } from '../../models/lobby';
@@ -42,7 +43,7 @@ async function leaveLobby(request: Request, response: Response): Promise<void> {
 	try {
 		await db.lobbyRemovePlayer(lobby.id, player.id);
 	} catch (error) {
-		console.log(error);
+		logger.error(error);
 		response.send(false);
 		return;
 	}
@@ -118,7 +119,7 @@ async function getLobbyPlayers(request: Request, response: Response): Promise<vo
 		response.send(await db.getLobbyPlayers(request.params.lobbyId));
 	} catch (error) {
 		// Failed for unknown reason
-		console.log(error);
+		logger.error(error);
 		response.sendStatus(500);
 	}
 }
@@ -134,7 +135,7 @@ async function getLobbyList(request: Request, response: Response): Promise<void>
 		response.send(await db.getLobbyList());
 	} catch (error) {
 		// Internal server error
-		console.log(error);
+		logger.error(error);
 		response.sendStatus(500);
 	}
 }
@@ -149,7 +150,7 @@ async function getLobby(request: Request, response: Response): Promise<void> {
 		response.send(await db.getLobby(request.params.lobbyId));
 	} catch (err) {
 		// Internal server error
-		console.log(err);
+		logger.error(err);
 		response.sendStatus(500);
 	}
 }
@@ -198,8 +199,8 @@ async function createLobby(request: Request, response: Response): Promise<void> 
 
 		// Notify any listeners of an update
 		io.to('lobbyListUpdate').emit('addLobby', payload.lobby);
-	} catch (err) {
-		console.log(err);
+	} catch (error) {
+		logger.log(error);
 	}
 
 	// Send the lobbyId
@@ -240,8 +241,8 @@ async function deleteLobby(request: Request, response: Response): Promise<void> 
 			if (ownerProfile.id === player.id) {
 				canClose = true;
 			}
-		} catch (err) {
-			console.log(err);
+		} catch (error) {
+			logger.error(error);
 			response.sendStatus(500); // Internal server error
 		}
 	}
