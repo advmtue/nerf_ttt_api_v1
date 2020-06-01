@@ -1,10 +1,23 @@
+// Modules
+import { promisify } from 'util';
+import { randomBytes } from 'crypto';
 import { Client } from 'pg';
+
+// Connection config
 import { postgresConfig } from '../config';
+
+// Interfaces
 import { Player, PlayerProfile } from '../models/player';
 import { Lobby } from '../models/lobby';
 import { PlayerJwt, InitialLogin } from '../models/auth';
+
+// Libs
 import * as jwtlib from './jwt';
+import * as cryptolib from './crypto';
 import { hashPassword } from './crypto';
+import { logger } from './logger';
+
+const randomBytesAsync = promisify(randomBytes);
 
 /**
  * Database abstractions, also housing a connection
@@ -12,6 +25,12 @@ import { hashPassword } from './crypto';
 class DBLib {
 	// Postgres client connection
 	client: Client;
+
+	// Salt when performing crypto hashes
+	hashSalt: string | undefined;
+
+	// JWT secret for key signing
+	jwtSecret: string | undefined;
 
 	constructor() {
 		this.client = new Client(postgresConfig);
@@ -23,6 +42,64 @@ class DBLib {
 	async connect() {
 		await this.client.connect();
 		await this.client.query('SET search_path TO main');
+
+		// Pull hash_salt and jwt_secret
+		await this.pullSecrets();
+
+		if (this.jwtSecret && this.hashSalt) {
+			jwtlib.setSecret(this.jwtSecret);
+			cryptolib.setSalt(this.hashSalt);
+		}
+	}
+
+	/**
+	 * Pull secrets from the database
+	 */
+	async pullSecrets() {
+		const q = await this.client.query('SELECT hash_salt, jwt_secret FROM config');
+
+		if (q.rowCount === 0) {
+			// They don't exist, generate them
+			await this.generateSecrets();
+			await this.invalidatePasswords();
+		} else {
+			this.hashSalt = q.rows[0].hash_salt;
+			this.jwtSecret = q.rows[0].jwt_secret;
+		}
+	}
+
+	/**
+	 * Generate new secrets and persist them in the database
+	 */
+	async generateSecrets() {
+		// 64-length salt
+		this.hashSalt = (await randomBytesAsync(32)).toString('hex');
+		cryptolib.setSalt(this.hashSalt);
+
+		// 64-length jwt_secret
+		this.jwtSecret = (await randomBytesAsync(32)).toString('hex');
+		jwtlib.setSecret(this.jwtSecret);
+
+		await this.client.query(
+			'INSERT INTO "config" (jwt_secret, hash_salt) VALUES ($1, $2)',
+			[this.jwtSecret, this.hashSalt],
+		);
+
+		logger.info('Inserted fresh jwt_secret and hash_salt into db');
+	}
+
+	/**
+	 * Reset all passwords to default and enable password_reset
+	 */
+	async invalidatePasswords() {
+		const defaultHash = await hashPassword('default');
+
+		await this.client.query(
+			'UPDATE player SET password = $1, password_reset = true',
+			[defaultHash],
+		);
+
+		logger.warn('Invalidated all user passwords');
 	}
 
 	/**
