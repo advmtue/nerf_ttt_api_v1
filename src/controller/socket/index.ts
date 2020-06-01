@@ -1,4 +1,4 @@
-import { db } from '../../lib/db';
+import * as db from '../../lib/db';
 import { logger } from '../../lib/logger';
 import * as jwtlib from '../../lib/jwt';
 

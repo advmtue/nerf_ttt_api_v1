@@ -1,5 +1,5 @@
 import { Request, Response, Router } from 'express';
-import { db } from '../../lib/db';
+import * as db from '../../lib/db';
 import * as apiResponse from '../../lib/apiresponse';
 
 /**

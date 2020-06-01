@@ -2,7 +2,7 @@
 import { Request, Response } from 'express';
 
 // Libs
-import { db } from './db';
+import * as db from './db';
 import { logger } from './logger';
 import * as jwtlib from './jwt';
 import * as apiResponse from './apiresponse';

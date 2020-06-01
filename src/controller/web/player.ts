@@ -2,7 +2,7 @@
 import { Request, Response, Router } from 'express';
 
 // Libs
-import { db } from '../../lib/db';
+import * as db from '../../lib/db';
 import { logger } from '../../lib/logger';
 import * as apiResponse from '../../lib/apiresponse';
 
