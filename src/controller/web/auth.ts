@@ -82,6 +82,6 @@ async function playerPostLogin(request: Request, response: Response): Promise<vo
  */
 export function applyRoutes(router: Router): void {
 	router.post('/login', playerPostLogin);
-	router.post('/passwordreset', [checkAuth, playerChangePassword]);
+	router.put('/login', [checkAuth, playerChangePassword]);
 }
 export default applyRoutes;
