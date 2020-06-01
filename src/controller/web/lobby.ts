@@ -266,6 +266,64 @@ async function deleteLobby(request: Request, response: Response): Promise<void> 
 }
 
 /**
+ * Player ready in lobby
+ *
+ * @param request Express request
+ * @param response Express response
+ */
+async function playerReady(request: Request, response: Response) {
+	const { lobbyId } = request.params;
+	const playerId = request.player?.id;
+
+	if (!playerId) {
+		response.send(apiResponse.httpError(403));
+		return;
+	}
+
+	try {
+		await db.lobbyPlayerReady(lobbyId, playerId);
+
+		// Ack
+		response.send(apiResponse.success());
+
+		// Notify lobby players
+		io.to(`lobby ${lobbyId}`).emit('playerReady', playerId);
+	} catch (error) {
+		logger.error(error);
+		response.send(apiResponse.httpError(500));
+	}
+}
+
+/**
+ * Player unready in lobby
+ * @param request Express request
+ * @param response Express response
+ */
+async function playerUnready(request: Request, response: Response) {
+	const playerId = request.player?.id;
+	const { lobbyId } = request.params;
+
+	// No auth
+	if (!playerId) {
+		response.send(apiResponse.httpError(403));
+		return;
+	}
+
+	try {
+		await db.lobbyPlayerUnready(lobbyId, playerId);
+
+		// Ack
+		response.send(apiResponse.success());
+
+		// Notify lobby players
+		io.to(`lobby ${lobbyId}`).emit('playerUnready', playerId);
+	} catch (error) {
+		logger.error(error);
+		response.send(apiResponse.httpError(500));
+	}
+}
+
+/**
  * Apply lobby specific routes to an express router
  *
  * @param router Express Router to modify
@@ -292,5 +350,9 @@ export function applyRoutes(router: Router): void {
 	router.get('/lobby/:lobbyId/join', [checkAuth, joinLobby]);
 	// Leave a lobby
 	router.get('/lobby/:lobbyId/leave', [checkAuth, leaveLobby]);
+
+	// Ready up
+	router.get('/lobby/:lobbyId/ready', [checkAuth, playerReady]);
+	router.get('/lobby/:lobbyId/unready', [checkAuth, playerUnready]);
 }
 export default applyRoutes;

@@ -1,5 +1,6 @@
 import { db } from '../../lib/db';
 import { logger } from '../../lib/logger';
+import * as jwtlib from '../../lib/jwt';
 
 /**
  * Send the active lobby list to a socket, and add it to the lobbyListUpdate room
@@ -25,6 +26,39 @@ async function joinLobby(this: SocketIO.Socket, lobbyId: number) {
 }
 
 /**
+ * Socket performs authentication request using JWT
+ *
+ * @param this Socket
+ * @param token Player JWT
+ */
+async function auth(this: SocketIO.Socket, token: string) {
+	const playerJwt = jwtlib.decode(token);
+
+	let player;
+	try {
+		player = await db.getPlayerProfile(playerJwt.id);
+	} catch (error) {
+		logger.error(error);
+		this.emit('auth', false);
+		return;
+	}
+
+	// Failed to auth a player with matching ID
+	if (player === null) {
+		this.emit('auth', false);
+		return;
+	}
+
+	this.player = player;
+	this.jwt = playerJwt;
+	// ACK
+	this.emit('auth', true);
+	// Join user room for any private messages
+	this.join(`player ${player.id}`);
+	logger.info(`Associated Socket#${this.id} with Player#${player.id}`);
+}
+
+/**
  * Performs route association on a socket
  *
  * @param socket The connecting socket
@@ -32,6 +66,7 @@ async function joinLobby(this: SocketIO.Socket, lobbyId: number) {
 function onConnect(socket: SocketIO.Socket) {
 	socket.on('getLobbyList', getLobbyList);
 	socket.on('joinLobby', joinLobby);
+	socket.on('auth', auth);
 }
 
 /**

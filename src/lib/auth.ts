@@ -48,7 +48,7 @@ export async function checkAuth(request: Request, response: Response, next: any)
 	// Assign parts to the request
 	if (player !== null) {
 		request.player = player;
-		request.userJwt = userJwt;
+		request.playerJwt = userJwt;
 		next();
 	} else {
 		response.send(apiResponse.httpError(403));

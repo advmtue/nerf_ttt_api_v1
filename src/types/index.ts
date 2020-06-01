@@ -1,6 +1,6 @@
 // Interfaces
 import { Player } from '../models/player';
-import { UserInfoJwt } from '../models/jwt';
+import { PlayerJwt } from '../models/auth';
 
 /**
  * Extend the express 'Request' interface
@@ -11,6 +11,21 @@ import { UserInfoJwt } from '../models/jwt';
 declare module 'express-serve-static-core' {
 	interface Request {
 		player?: Player;
-		userJwt?: UserInfoJwt;
+		playerJwt?: PlayerJwt;
+	}
+}
+
+/**
+ * Extend socket.io socket interface
+ *
+ * player?: A player assigned during auth
+ * jwt?: Jwt used for auth
+ */
+declare global {
+	namespace SocketIO {
+		interface Socket {
+			player?: Player;
+			jwt?: PlayerJwt;
+		}
 	}
 }

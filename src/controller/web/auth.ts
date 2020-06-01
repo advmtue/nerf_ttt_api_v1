@@ -2,14 +2,11 @@
 import { Request, Response, Router } from 'express';
 
 // Lib
-import { hashPassword } from '../../lib/crypto';
 import { db } from '../../lib/db';
-import * as jwtlib from '../../lib/jwt';
 import { checkAuth } from '../../lib/auth';
 import * as apiResponse from '../../lib/apiresponse';
-
-// Interfaces
-import { LoginResponse } from '../../models/login';
+import { logger } from '../../lib/logger';
+import { InitialLogin } from '../../models/auth';
 
 /**
  * HTTP request for a player to change their password.
@@ -25,28 +22,26 @@ async function playerChangePassword(request: Request, response: Response): Promi
 		return;
 	}
 
-	// Interpret the post request as a ChangePasswordForm
-	if (!request.body.currentPassword || !request.body.newPassword) {
+	// Extract new and current password
+	const { newPassword, currentPassword } = request.body;
+
+	if (!newPassword || !currentPassword) {
+		// Malformed request
 		response.send(apiResponse.httpError(400));
 		return;
 	}
 
-	// Extract new and current password
-	const { newPassword, currentPassword } = request.body;
-
 	// Extract user variables
 	const userId = request.player.id;
-	const curpwHash = await hashPassword(currentPassword);
-	const pwHash = await hashPassword(newPassword);
 
 	// Determine the status of updating the password in the database
-	let success = false;
-	success = await db.setPlayerPassword(pwHash, userId, curpwHash);
-
-	if (success) {
-		response.send(apiResponse.success());
-	} else {
-		response.send(apiResponse.httpError(500));
+	try {
+		await db.setPlayerPassword(newPassword, userId, currentPassword);
+		const initial = await db.createInitialLogin(userId);
+		response.send(apiResponse.success<InitialLogin>(initial));
+	} catch (error) {
+		logger.error(error);
+		response.send(apiResponse.httpError(401));
 	}
 }
 
@@ -57,42 +52,27 @@ async function playerChangePassword(request: Request, response: Response): Promi
  * @param response Express response object
  */
 async function playerPostLogin(request: Request, response: Response): Promise<void> {
-	// Ensure the correct parameters have been sent
-	if (!request.body.username || !request.body.password) {
-		// Malformed request
-		response.send(apiResponse.httpError(400));
-		return;
-	}
-
 	// Extract username and password from the request
 	const { username, password } = request.body;
 
-	// Hash the supplied password
-	const hashpwd = await hashPassword(password);
+	// Ensure the correct parameters have been sent
+	if (!username || !password) {
+		response.send(apiResponse.httpError(400)); // Malformed request
+		return;
+	}
 
-	// Retrieve player listing
-	let player: {id: number, group: string, password_reset: boolean } | null;
 	try {
-		player = await db.getPlayerLogin(username, hashpwd);
-	} catch {
-		// Couldn't pull the login information (internal error)
+		// Pull a userId for this login
+		const userId = await db.getPlayerIdByLogin(username, password);
+
+		// Create initial login package and send
+		const intial = await db.createInitialLogin(userId);
+		response.send(apiResponse.success<InitialLogin>(intial));
+	} catch (error) {
+		logger.error(error);
+		// Internal error
 		response.send(apiResponse.httpError(500));
-		return;
 	}
-
-	// Login returned no rows (null user)
-	if (player === null) {
-		response.send(apiResponse.httpError(401));
-		return;
-	}
-
-	// Create the login response
-	const loginResponse: LoginResponse = {
-		token: jwtlib.createToken({ id: player.id, group: player.group }),
-		passwordReset: player.password_reset,
-	};
-
-	response.send(apiResponse.success<LoginResponse>(loginResponse));
 }
 
 /**

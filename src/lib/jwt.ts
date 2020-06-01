@@ -5,14 +5,14 @@ import * as jwt from 'jsonwebtoken';
 import { jwtConfig } from '../config';
 
 // Interfaces
-import { UserInfoJwt } from '../models/jwt';
+import { PlayerJwt } from '../models/auth';
 
 /**
  * Create and sign a token using the jwt options from config
  *
  * @param data A UserInfoJwt interface for a user's info
  */
-export function createToken(data: UserInfoJwt): string {
+export function createToken(data: PlayerJwt): string {
 	return jwt.sign(
 		data,
 		jwtConfig.secret,
@@ -25,9 +25,9 @@ export function createToken(data: UserInfoJwt): string {
  *
  * @param token String containing encoded UserInfoJwt interface
  */
-export function decode(token: string): UserInfoJwt {
+export function decode(token: string): PlayerJwt {
 	return jwt.verify(
 		token,
 		jwtConfig.secret,
-	) as UserInfoJwt;
+	) as PlayerJwt;
 }

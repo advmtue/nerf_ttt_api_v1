@@ -2,7 +2,9 @@ import { Client } from 'pg';
 import { postgresConfig } from '../config';
 import { Player, PlayerProfile } from '../models/player';
 import { Lobby } from '../models/lobby';
-import { PlayerLogin } from '../models/login';
+import { PlayerJwt, InitialLogin } from '../models/auth';
+import * as jwtlib from './jwt';
+import { hashPassword } from './crypto';
 
 /**
  * Database abstractions, also housing a connection
@@ -24,19 +26,24 @@ class DBLib {
 	}
 
 	/**
-	 * Change a player's password if curpwHash matches
+	 * Change a player's password
 	 *
-	 * @param pwHash The hash of the new password
-	 * @param userId User id
-	 * @param curpwHash The hash of the new password
+	 * @param pw New password (Plain Text)
+	 * @param userId User ID
+	 * @param curPw Current password (Plain Text)
 	 */
-	async setPlayerPassword(pwHash: string, userId: number, curpwHash: string) {
-		const updateQuery = await this.client.query(
+	async setPlayerPassword(pw: string, userId: number, curPw: string) {
+		const pwHash = await hashPassword(pw);
+		const curpwHash = await hashPassword(curPw);
+
+		const q = await this.client.query(
 			'UPDATE "player" SET "password_reset" = false, "password" = $1 WHERE "id" = $2 AND "password" = $3',
 			[pwHash, userId, curpwHash],
 		);
 
-		return updateQuery.rowCount === 1;
+		if (q.rowCount === 0) {
+			throw new Error('No records match login');
+		}
 	}
 
 	/**
@@ -54,12 +61,77 @@ class DBLib {
 	}
 
 	/**
+	 * Create a new jwt for a given player
+	 *
+	 * @param playerId Player ID
+	 */
+	async createAuthToken(playerId: number) {
+		const q = await this.client.query(
+			'SELECT "id", "password_reset", "group" from "player" WHERE id = $1',
+			[playerId],
+		);
+
+		if (q.rowCount === 0) {
+			throw new Error('Couldn\'t find player specified');
+		}
+
+		const loginInfo = q.rows[0] as PlayerJwt;
+		const token = jwtlib.createToken(loginInfo);
+
+		return token;
+	}
+
+	/**
+	 * Create an InitialLogin for a given playerId
+	 *
+	 * @param playerId Player ID
+	 */
+	async createInitialLogin(playerId: number) {
+		const token = await this.createAuthToken(playerId);
+		const profile = await this.getPlayerProfile(playerId);
+
+		if (profile === null) {
+			throw new Error('Couldn\'t pull player profile');
+		}
+
+		const permissions = await this.getGroupPermissions(profile.group_name);
+
+		return {
+			jwt: token,
+			profile,
+			permissions,
+		} as InitialLogin;
+	}
+
+	/**
+	 * Return playerID of matching login
+	 *
+	 * @param username User name
+	 * @param pw Plaintext password
+	 */
+	async getPlayerIdByLogin(username: string, pw: string): Promise<number> {
+		// Hash the user password
+		const hashedPw = await hashPassword(pw);
+
+		const q = await this.client.query(
+			'SELECT "id" FROM player WHERE username = $1 AND password = $2',
+			[username, hashedPw],
+		);
+
+		if (q.rowCount !== 1) {
+			throw new Error('Query did not return 1 row.');
+		}
+
+		return q.rows[0].id as number;
+	}
+
+	/**
 	 * Pull any player logins that match the given credentials
 	 *
 	 * @param username username to match
 	 * @param pw password hash to match
 	 */
-	async getPlayerLogin(username: string, pw: string): Promise<PlayerLogin | null> {
+	async getPlayerLogin(username: string, pw: string): Promise<PlayerJwt | null> {
 		const query = await this.client.query(
 			'SELECT "id", "password_reset", "group" FROM "player" WHERE "username"=$1 and "password"=$2;',
 			[username, pw],
@@ -74,7 +146,7 @@ class DBLib {
 		}
 
 		// Once login found, return as PlayerLogin
-		return query.rows[0] as PlayerLogin;
+		return query.rows[0] as PlayerJwt;
 	}
 
 	/**
@@ -265,6 +337,31 @@ class DBLib {
 	async lobbyRemovePlayer(lobbyId: number | string, playerId: number) {
 		await this.client.query(
 			'DELETE FROM lobby_player WHERE lobby_id = $1 AND player_id = $2',
+			[lobbyId, playerId],
+		);
+	}
+
+	/**
+	 * Player ready
+	 * @param lobbyId Lobby ID
+	 * @param playerId Player ID
+	 */
+	async lobbyPlayerReady(lobbyId: number| string, playerId: number) {
+		await this.client.query(
+			'UPDATE lobby_player SET ready = TRUE where lobby_id = $1 AND player_id = $2',
+			[lobbyId, playerId],
+		);
+	}
+
+	/**
+	 * Player unready
+	 *
+	 * @param lobbyId Lobby ID
+	 * @param playerId Player ID
+	 */
+	async lobbyPlayerUnready(lobbyId: number | string, playerId: number) {
+		await this.client.query(
+			'UPDATE lobby_player SET ready = FALSE WHERE lobby_id = $1 AND player_id = $2',
 			[lobbyId, playerId],
 		);
 	}
