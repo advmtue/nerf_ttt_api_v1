@@ -1,27 +1,19 @@
-/**
- * Most basic information for a player
- */
 export interface Player {
 	id: number;
-	group: string;
-}
-
-/**
- * Player login response
- */
-export interface PlayerLogin extends Player {
-	password_reset: boolean;
-}
-
-/**
- * Full public player profile
- */
-export interface PlayerProfile {
-	id: number;
-	first_name: string,
-	last_name: string,
-	banned: boolean,
+	first_name: string;
+	last_name: string;
+	banned: boolean;
+	join_date: string;
 	group_name: string;
 	group_colour: string;
 	group_emoji: string;
+	group_icon_file: string;
+}
+
+export interface PlayerProfile extends Player {
+	stats_kills: number;
+	stats_deaths: number;
+	stats_wins: number;
+	stats_losses: number;
+	stats_played: number
 }

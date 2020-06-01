@@ -3,6 +3,8 @@ import { Request, Response, Router } from 'express';
 
 // Libs
 import { db } from '../../lib/db';
+import { logger } from '../../lib/logger';
+import * as apiResponse from '../../lib/apiresponse';
 
 /**
  * HTTP endpoint for retrieving a full public player listing
@@ -11,8 +13,12 @@ import { db } from '../../lib/db';
  * @param response Express response object
  */
 async function getPlayerList(request: Request, response: Response): Promise<void> {
-	const playerList = await db.getPlayerList();
-	response.send(playerList);
+	try {
+		response.send(apiResponse.success(await db.getPlayerList()));
+	} catch (error) {
+		logger.error(error);
+		response.send(apiResponse.httpError(500));
+	}
 }
 
 /**
@@ -25,10 +31,9 @@ async function getPlayerProfile(request: Request, response: Response): Promise<v
 	const numberId = request.params.playerId;
 
 	try {
-		const player = await db.getPlayerProfile(numberId);
-		response.send(player);
+		response.send(apiResponse.success(await db.getPlayerProfile(numberId)));
 	} catch {
-		response.send([]);
+		response.send(apiResponse.httpError(500));
 	}
 }
 

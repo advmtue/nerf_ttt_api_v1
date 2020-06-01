@@ -1,7 +1,8 @@
 import { Client } from 'pg';
 import { postgresConfig } from '../config';
-import { PlayerLogin, PlayerProfile } from '../models/player';
+import { Player, PlayerProfile } from '../models/player';
 import { Lobby } from '../models/lobby';
+import { PlayerLogin } from '../models/login';
 
 /**
  * Database abstractions, also housing a connection
@@ -43,13 +44,13 @@ class DBLib {
 	 *
 	 * @param lobbyId The id of the lobby
 	 */
-	async getLobbyPlayers(lobbyId: number | string): Promise<PlayerProfile[]> {
+	async getLobbyPlayers(lobbyId: number | string): Promise<Player[]> {
 		const query = await this.client.query(
 			'SELECT * FROM lobby_player_public WHERE lobby_id = $1',
 			[lobbyId],
 		);
 
-		return query.rows as PlayerProfile[];
+		return query.rows as Player[];
 	}
 
 	/**
@@ -58,7 +59,7 @@ class DBLib {
 	 * @param username username to match
 	 * @param pw password hash to match
 	 */
-	async getPlayerLogin(username: string, pw: string): Promise<PlayerLogin> {
+	async getPlayerLogin(username: string, pw: string): Promise<PlayerLogin | null> {
 		const query = await this.client.query(
 			'SELECT "id", "password_reset", "group" FROM "player" WHERE "username"=$1 and "password"=$2;',
 			[username, pw],
@@ -66,11 +67,13 @@ class DBLib {
 
 		// If there's more than one player matching, return an error
 		// This shouldn't be possible if the DB has proper unique constraints
-		if (query.rows.length !== 1) {
-			throw new Error("PlayerLogin query didn't return 1 row");
+		if (query.rowCount > 1) {
+			throw new Error('getPlayerLogin returned multiple rows');
+		} else if (query.rowCount === 0) {
+			return null;
 		}
 
-		// Return the player
+		// Once login found, return as PlayerLogin
 		return query.rows[0] as PlayerLogin;
 	}
 
@@ -125,7 +128,7 @@ class DBLib {
 	 */
 	async getPlayerList() {
 		const q = await this.client.query('SELECT * FROM player_public');
-		return q.rows as PlayerProfile[];
+		return q.rows as Player[];
 	}
 
 	/**
@@ -210,7 +213,14 @@ class DBLib {
 		);
 
 		// Group has permission || group has all permissions
-		return q.rows.indexOf(permissionName) > -1 || q.rows.indexOf('all') > -1;
+		let hasPermission = false;
+		q.rows.forEach((row) => {
+			if (row.permission_name === 'all' || row.permission_name === permissionName) {
+				hasPermission = true;
+			}
+		});
+
+		return hasPermission;
 	}
 
 	/**
@@ -228,7 +238,7 @@ class DBLib {
 			throw new Error('Player not found');
 		}
 
-		return q.rows[0] as PlayerProfile;
+		return q.rows[0] as Player;
 	}
 
 	/**

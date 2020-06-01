@@ -15,11 +15,3 @@ export interface Lobby {
 	owner_group_emoji: string;
 	player_count: number;
 }
-
-/**
- * Reponse when user attempts to create a lobby
- */
-export interface CreateLobbyResponse {
-	success: boolean;
-	lobby: Lobby | null;
-}

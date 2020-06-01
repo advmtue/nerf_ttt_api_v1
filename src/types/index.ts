@@ -1,5 +1,5 @@
 // Interfaces
-import { PlayerProfile } from '../models/player';
+import { Player } from '../models/player';
 import { UserInfoJwt } from '../models/jwt';
 
 /**
@@ -10,7 +10,7 @@ import { UserInfoJwt } from '../models/jwt';
  */
 declare module 'express-serve-static-core' {
 	interface Request {
-		player?: PlayerProfile;
+		player?: Player;
 		userJwt?: UserInfoJwt;
 	}
 }

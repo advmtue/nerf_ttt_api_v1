@@ -4,11 +4,12 @@ import { Request, Response, Router } from 'express';
 // Libs
 import { db } from '../../lib/db';
 import { io } from '../../lib/io';
-import { checkAuth } from '../../lib/web';
+import { checkAuth } from '../../lib/auth';
 import { logger } from '../../lib/logger';
+import * as apiResponse from '../../lib/apiresponse';
 
 // Interfaces
-import { Lobby, CreateLobbyResponse } from '../../models/lobby';
+import { Lobby } from '../../models/lobby';
 
 /**
  * HTTP endpoint for a player requesting to leave a lobby
@@ -20,7 +21,7 @@ import { Lobby, CreateLobbyResponse } from '../../models/lobby';
 async function leaveLobby(request: Request, response: Response): Promise<void> {
 	const { player } = request;
 	if (!player) {
-		response.sendStatus(403);
+		response.send(apiResponse.httpError(403));
 		return;
 	}
 
@@ -29,13 +30,13 @@ async function leaveLobby(request: Request, response: Response): Promise<void> {
 	try {
 		lobby = await db.getLobby(request.params.lobbyId);
 	} catch {
-		response.sendStatus(404);
+		response.send(apiResponse.httpError(404));
 		return;
 	}
 
 	// Ensure the lobby exists and it is still in the WAITING phase
 	if (lobby === null || lobby.lobby_status !== 'WAITING') {
-		response.sendStatus(403);
+		response.send(apiResponse.error(2, 'Lobby is either NULL or not WAITING'));
 		return;
 	}
 
@@ -44,7 +45,7 @@ async function leaveLobby(request: Request, response: Response): Promise<void> {
 		await db.lobbyRemovePlayer(lobby.id, player.id);
 	} catch (error) {
 		logger.error(error);
-		response.send(false);
+		response.send(apiResponse.error(1, 'Failed to remove player from lobby.'));
 		return;
 	}
 
@@ -55,7 +56,7 @@ async function leaveLobby(request: Request, response: Response): Promise<void> {
 	io.to('lobbyListUpdate').emit('lobbyPlayerChange', { lobby: lobby.id, change: -1 });
 
 	// Let the client know their request succeeded, and they have left the lobby
-	response.send(true);
+	response.send(apiResponse.success());
 }
 
 /**
@@ -69,7 +70,7 @@ async function joinLobby(request: Request, response: Response): Promise<void> {
 	// Get player information
 	const { player } = request;
 	if (player === undefined) {
-		response.sendStatus(403);
+		response.send(apiResponse.httpError(403));
 		return;
 	}
 
@@ -78,13 +79,13 @@ async function joinLobby(request: Request, response: Response): Promise<void> {
 	try {
 		lobby = await db.getLobby(request.params.lobbyId);
 	} catch {
-		response.sendStatus(403);
+		response.send(apiResponse.httpError(403));
 		return;
 	}
 
 	// Ensure the lobby exists and that it is in the WAITING phase
 	if (lobby === null || lobby.lobby_status !== 'WAITING') {
-		response.sendStatus(403);
+		response.send(apiResponse.error(2, 'Lobby is either NULL or not WAITING'));
 		return;
 	}
 
@@ -94,12 +95,12 @@ async function joinLobby(request: Request, response: Response): Promise<void> {
 	} catch (error) {
 		// Failed to join (internal server error?)
 		// Send false status to player
-		response.send(false);
+		response.send(apiResponse.error(1, 'Failed to add player to lobby'));
 		return;
 	}
 
 	// Ack player
-	response.send(true);
+	response.send(apiResponse.success());
 
 	// Update the lobby room with the new player
 	io.to(`lobby ${lobby.id}`).emit('playerJoin', player);
@@ -116,11 +117,12 @@ async function joinLobby(request: Request, response: Response): Promise<void> {
  */
 async function getLobbyPlayers(request: Request, response: Response): Promise<void> {
 	try {
-		response.send(await db.getLobbyPlayers(request.params.lobbyId));
+		const players = await db.getLobbyPlayers(request.params.lobbyId);
+		response.send(apiResponse.success(players));
 	} catch (error) {
-		// Failed for unknown reason
+		// Internal server error
 		logger.error(error);
-		response.sendStatus(500);
+		response.send(apiResponse.httpError(500));
 	}
 }
 
@@ -132,11 +134,12 @@ async function getLobbyPlayers(request: Request, response: Response): Promise<vo
  */
 async function getLobbyList(request: Request, response: Response): Promise<void> {
 	try {
-		response.send(await db.getLobbyList());
+		const lobbyList = await db.getLobbyList();
+		response.send(apiResponse.success(lobbyList));
 	} catch (error) {
 		// Internal server error
 		logger.error(error);
-		response.sendStatus(500);
+		response.send(apiResponse.httpError(500));
 	}
 }
 
@@ -147,11 +150,12 @@ async function getLobbyList(request: Request, response: Response): Promise<void>
  */
 async function getLobby(request: Request, response: Response): Promise<void> {
 	try {
-		response.send(await db.getLobby(request.params.lobbyId));
+		const lobby = await db.getLobby(request.params.lobbyId);
+		response.send(apiResponse.success(lobby));
 	} catch (err) {
 		// Internal server error
 		logger.error(err);
-		response.sendStatus(500);
+		response.send(apiResponse.httpError(500));
 	}
 }
 
@@ -164,22 +168,17 @@ async function getLobby(request: Request, response: Response): Promise<void> {
 async function createLobby(request: Request, response: Response): Promise<void> {
 	// Ensure the body has actually been filled out
 	if (!request.body.name) {
-		response.sendStatus(400); // Malformed request
+		// Malformed request
+		response.send(apiResponse.httpError(400));
 		return;
 	}
 
 	const lobbyName = request.body.name;
 
-	// Setup the payload for sending back to the user
-	const payload: CreateLobbyResponse = {
-		success: false,
-		lobby: null,
-	};
-
 	// Pull the userid
 	const user = request.player;
 	if (!user) {
-		response.sendStatus(403); // Forbidden
+		response.send(apiResponse.httpError(403));
 		return;
 	}
 
@@ -188,23 +187,23 @@ async function createLobby(request: Request, response: Response): Promise<void> 
 
 	// If the player doesn't have permission to make the request
 	if (!hasPermission) {
-		response.sendStatus(403); // Forbidden
+		response.send(apiResponse.httpError(403));
 		return;
 	}
 
 	// Create the lobby
 	try {
-		payload.lobby = await db.createLobby(user.id, lobbyName);
-		payload.success = true;
+		const lobby = await db.createLobby(user.id, lobbyName);
+
+		// Send success response
+		response.send(apiResponse.success(lobby));
 
 		// Notify any listeners of an update
-		io.to('lobbyListUpdate').emit('addLobby', payload.lobby);
+		io.to('lobbyListUpdate').emit('addLobby', lobby);
 	} catch (error) {
 		logger.log(error);
+		response.send(apiResponse.httpError(500));
 	}
-
-	// Send the lobbyId
-	response.send(payload);
 }
 
 /**
@@ -222,7 +221,7 @@ async function deleteLobby(request: Request, response: Response): Promise<void> 
 	// Get the calling player
 	const { player } = request;
 	if (!player) {
-		response.sendStatus(403); // Forbidden
+		response.send(apiResponse.httpError(403));
 		return;
 	}
 
@@ -243,7 +242,7 @@ async function deleteLobby(request: Request, response: Response): Promise<void> 
 			}
 		} catch (error) {
 			logger.error(error);
-			response.sendStatus(500); // Internal server error
+			response.send(apiResponse.httpError(500));
 		}
 	}
 
@@ -259,10 +258,10 @@ async function deleteLobby(request: Request, response: Response): Promise<void> 
 		io.to('lobbyListUpdate').emit('removeLobby', { id: lobbyId });
 
 		// Send success to the caller
-		response.send(true);
+		response.send(apiResponse.success());
 	} else {
 		// Send failure to the caller
-		response.send(false);
+		response.send(apiResponse.httpError(403));
 	}
 }
 

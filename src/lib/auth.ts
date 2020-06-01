@@ -5,9 +5,10 @@ import { Request, Response } from 'express';
 import { db } from './db';
 import { logger } from './logger';
 import * as jwtlib from './jwt';
+import * as apiResponse from './apiresponse';
 
 // Interfaces
-import { PlayerProfile } from '../models/player';
+import { Player } from '../models/player';
 
 /**
  * Express middleware which restricts only authenticated users to view a path
@@ -19,7 +20,7 @@ import { PlayerProfile } from '../models/player';
 export async function checkAuth(request: Request, response: Response, next: any) {
 	// Ensure auth headers have actually been sent
 	if (!request.headers.authorization) {
-		response.sendStatus(403);
+		response.send(apiResponse.httpError(403));
 		return;
 	}
 
@@ -34,7 +35,7 @@ export async function checkAuth(request: Request, response: Response, next: any)
 	}
 
 	// Pull a user and assign it to the request context
-	let player: PlayerProfile | null;
+	let player: Player | null;
 	try {
 		player = await db.getPlayerProfile(userJwt.id);
 	} catch (error) {
@@ -48,8 +49,9 @@ export async function checkAuth(request: Request, response: Response, next: any)
 	if (player !== null) {
 		request.player = player;
 		request.userJwt = userJwt;
+		next();
+	} else {
+		response.send(apiResponse.httpError(403));
 	}
-
-	next();
 }
 export default checkAuth;
