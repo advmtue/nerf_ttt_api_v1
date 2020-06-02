@@ -9,7 +9,7 @@ import * as cookieParser from 'cookie-parser';
 import { createRouter } from './controller/web';
 
 // Libs
-import * as db from './lib/db';
+import * as db from './controller/database';
 import * as iolib from './lib/io';
 import { logger } from './lib/logger';
 

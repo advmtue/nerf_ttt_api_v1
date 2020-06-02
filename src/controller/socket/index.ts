@@ -1,4 +1,4 @@
-import * as db from '../../lib/db';
+import * as db from '../database';
 import { logger } from '../../lib/logger';
 import * as jwtlib from '../../lib/jwt';
 
@@ -8,7 +8,7 @@ import * as jwtlib from '../../lib/jwt';
  * @param this The calling socket
  */
 async function getLobbyList(this: SocketIO.Socket) {
-	const lobbies = await db.getLobbyList();
+	const lobbies = await db.lobby.getList();
 	this.emit('getLobbyList', lobbies);
 	// Join the lobby update group
 	this.join('lobbyListUpdate');
@@ -36,7 +36,7 @@ async function auth(this: SocketIO.Socket, token: string) {
 
 	let player;
 	try {
-		player = await db.getPlayerProfile(playerJwt.id);
+		player = await db.player.get(playerJwt.id);
 	} catch (error) {
 		logger.error(error);
 		this.emit('auth', false);

@@ -2,7 +2,7 @@
 import { Request, Response, Router } from 'express';
 
 // Libs
-import * as db from '../../lib/db';
+import * as db from '../database';
 import { logger } from '../../lib/logger';
 import * as apiResponse from '../../lib/apiresponse';
 
@@ -14,7 +14,7 @@ import * as apiResponse from '../../lib/apiresponse';
  */
 async function getPlayerList(request: Request, response: Response): Promise<void> {
 	try {
-		response.send(apiResponse.success(await db.getPlayerList()));
+		response.send(apiResponse.success(await db.player.getList()));
 	} catch (error) {
 		logger.error(error);
 		response.send(apiResponse.httpError(500));
@@ -31,7 +31,7 @@ async function getPlayerProfile(request: Request, response: Response): Promise<v
 	const numberId = request.params.playerId;
 
 	try {
-		response.send(apiResponse.success(await db.getPlayerProfile(numberId)));
+		response.send(apiResponse.success(await db.player.get(numberId)));
 	} catch {
 		response.send(apiResponse.httpError(500));
 	}

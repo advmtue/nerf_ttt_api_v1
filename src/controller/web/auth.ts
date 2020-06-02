@@ -2,7 +2,7 @@
 import { Request, Response, Router } from 'express';
 
 // Lib
-import * as db from '../../lib/db';
+import * as db from '../database';
 import { checkAuth } from '../../lib/auth';
 import * as apiResponse from '../../lib/apiresponse';
 import { logger } from '../../lib/logger';
@@ -36,8 +36,8 @@ async function playerChangePassword(request: Request, response: Response): Promi
 
 	// Determine the status of updating the password in the database
 	try {
-		await db.setPlayerPassword(newPassword, userId, currentPassword);
-		const initial = await db.createInitialLogin(userId);
+		await db.player.changePassword(newPassword, userId, currentPassword);
+		const initial = await db.auth.createInitialLogin(userId);
 		response.send(apiResponse.success<InitialLogin>(initial));
 	} catch (error) {
 		logger.error(error);
@@ -63,10 +63,10 @@ async function playerPostLogin(request: Request, response: Response): Promise<vo
 
 	try {
 		// Pull a userId for this login
-		const userId = await db.getPlayerIdByLogin(username, password);
+		const userId = await db.player.getIdByLogin(username, password);
 
 		// Create initial login package and send
-		const intial = await db.createInitialLogin(userId);
+		const intial = await db.auth.createInitialLogin(userId);
 		response.send(apiResponse.success<InitialLogin>(intial));
 	} catch (error) {
 		logger.error(error);

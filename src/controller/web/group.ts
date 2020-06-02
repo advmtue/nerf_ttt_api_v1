@@ -1,5 +1,5 @@
 import { Request, Response, Router } from 'express';
-import * as db from '../../lib/db';
+import * as db from '../database';
 import * as apiResponse from '../../lib/apiresponse';
 
 /**
@@ -10,7 +10,7 @@ import * as apiResponse from '../../lib/apiresponse';
  */
 async function getGroupPermissions(request: Request, response: Response): Promise<void> {
 	const { groupId } = request.params;
-	const permissions = await db.getGroupPermissions(groupId);
+	const permissions = await db.group.getPermissions(groupId);
 	response.send(apiResponse.success(permissions));
 }
 

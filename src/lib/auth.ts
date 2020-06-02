@@ -2,7 +2,7 @@
 import { Request, Response } from 'express';
 
 // Libs
-import * as db from './db';
+import * as db from '../controller/database';
 import { logger } from './logger';
 import * as jwtlib from './jwt';
 import * as apiResponse from './apiresponse';
@@ -37,7 +37,7 @@ export async function checkAuth(request: Request, response: Response, next: any)
 	// Pull a user and assign it to the request context
 	let player: Player | null;
 	try {
-		player = await db.getPlayerProfile(userJwt.id);
+		player = await db.player.get(userJwt.id);
 	} catch (error) {
 		// Failed to pull user
 		logger.error(error);
