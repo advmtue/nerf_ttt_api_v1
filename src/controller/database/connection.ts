@@ -50,7 +50,7 @@ async function invalidatePasswords() {
 		[defaultHash],
 	);
 
-	logger.warn('Invalidated all user passwords');
+	logger.info('Invalidated all user passwords');
 }
 
 /**

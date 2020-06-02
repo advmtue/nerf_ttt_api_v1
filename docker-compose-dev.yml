@@ -11,6 +11,7 @@ services:
             - ./src:/usr/src/app/src
         networks:
             - nerf_ttt
+        tty: true
 
 networks:
     nerf_ttt:

@@ -176,7 +176,7 @@ async function createLobby(request: Request, response: Response): Promise<void> 
 		// Notify any listeners of an update
 		io.to('lobbyListUpdate').emit('addLobby', lobby);
 	} catch (error) {
-		logger.log(error);
+		logger.error(error);
 		response.send(apiResponse.httpError(500));
 	}
 }
@@ -319,7 +319,7 @@ async function startLobby(request: Request, response: Response) {
 	try {
 		gameId = await db.lobby.start(lobbyId, player.id);
 	} catch (error) {
-		logger.error('Failed to start lobby', error);
+		logger.error(error);
 		response.send(apiResponse.error(1, error.message));
 		return;
 	}

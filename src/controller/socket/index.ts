@@ -21,7 +21,7 @@ async function getLobbyList(this: SocketIO.Socket) {
  * @param lobbyId Lobby to be joined
  */
 async function joinLobby(this: SocketIO.Socket, lobbyId: number) {
-	logger.log('info', `Socket joined lobby ${lobbyId}`);
+	logger.info(`Socket joined lobby ${lobbyId}`);
 	this.join(`lobby ${lobbyId}`);
 }
 
