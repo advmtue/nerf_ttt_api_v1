@@ -331,7 +331,7 @@ async function startLobby(request: Request, response: Response) {
 	io.to(`lobby ${lobbyId}`).emit('lobbyStarted', gameId);
 
 	// Notify the main page listeners
-	io.to('lobbyListUpdate').emit('lobbyStarted', { id: lobbyId });
+	io.to('lobbyListUpdate').emit('lobbyStarted', lobbyId);
 }
 
 /**

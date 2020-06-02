@@ -1,5 +1,6 @@
 // Connection
 import { connection } from './connection';
+import * as game from './game';
 
 // Interfaces
 import { Player } from '../../models/player';
@@ -191,7 +192,7 @@ export async function removePlayer(lobbyId: number | string, playerId: number) {
  * @param lobbyId Lobby ID
  * @param playerId Player ID
  */
-export async function setPlayerReady(lobbyId: number| string, playerId: number) {
+export async function setPlayerReady(lobbyId: number | string, playerId: number) {
 	await connection.query(
 		'UPDATE lobby_player SET ready = TRUE where lobby_id = $1 AND player_id = $2',
 		[lobbyId, playerId],
@@ -212,6 +213,69 @@ export async function setPlayerUnready(lobbyId: number | string, playerId: numbe
 }
 
 /**
+ * Check that all players are ready in a lobby
+ *
+ * @param lobbyId Lobby ID
+ */
+export async function playersAreReady(lobbyId: number) {
+	const playerStates = await connection.query(
+		'SELECT ready FROM lobby_player WHERE lobby_id = $1',
+		[lobbyId],
+	);
+
+	// If there's no players in the lobby, it's not ready
+	if (playerStates.rowCount === 0) {
+		return false;
+	}
+
+	// If any players are not ready, fail
+	return !playerStates.rows.some((pl) => pl.ready === false);
+}
+
+/**
+ * Get lobby state
+ *
+ * @param lobbyId Lobby ID
+ */
+export async function state(lobbyId: number) {
+	const st = await connection.query(
+		'SELECT lobby_status FROM lobby_public WHERE id = $1',
+		[lobbyId],
+	);
+
+	if (st.rowCount === 0) {
+		throw new Error('Lobby not found');
+	}
+
+	return st.rows[0].lobby_status;
+}
+
+/**
+ * Get player count for lobby
+ *
+ * @param lobbyId Lobby ID
+ */
+export async function playerCount(lobbyId: number) {
+	return (await connection.query(
+		'SELECT COUNT(*) as player_count FROM lobby_player WHERE lobby_id = $1',
+		[lobbyId],
+	)).rows[0].player_count;
+}
+
+/**
+ * Change a lobby status
+ *
+ * @param lobbyId Lobby ID
+ * @param status Status
+ */
+export async function setStatus(lobbyId: number, status: string) {
+	return connection.query(
+		'UPDATE lobby SET lobby_status = $1 WHERE id = $2',
+		[status, lobbyId],
+	);
+}
+
+/**
  * Start a lobby.
  * Sets lobby_status = IN_PROGRESS
  * Creates a new game from the given lobby
@@ -223,28 +287,29 @@ export async function setPlayerUnready(lobbyId: number | string, playerId: numbe
  * @param playerId Player ID
  */
 export async function start(lobbyId: number, playerId: number) {
-	// Check lobby state is WAITING
-	const state = await connection.query(
-		'SELECT lobby_status FROM lobby_public WHERE id = $1',
-		[lobbyId],
-	);
-
-	if (state.rowCount === 0) {
-		throw new Error('Could not find lobby specified');
-	} else if (state.rows[0].lobby_status !== 'WAITING') {
-		throw new Error('Lobby is not in waiting phase');
+	// Ensure the calling player is gamemaster
+	if ((await getOwner(lobbyId)).id !== playerId) {
+		throw new Error('You are not the gamemaster');
 	}
 
-	const update = await connection.query(
-		'UPDATE lobby SET lobby_status = $1 WHERE id = $2 AND owner_id = $3',
-		['IN_PROGRESS', lobbyId, playerId],
-	);
-
-	// If no update occurred, the player was not the gamemaster
-	if (update.rowCount === 0) {
-		throw new Error('Insufficient permission to start lobby');
+	// Ensure state is still in 'WAITING'
+	if (await state(lobbyId) !== 'WAITING') {
+		throw new Error('Lobby is not in WAITING phase');
 	}
 
-	// TODO Create game
-	return 1;
+	// Ensure all players are ready
+	if (!(await playersAreReady(lobbyId))) {
+		throw new Error('Players are not ready');
+	}
+
+	// Ensure there are the minimum number of players
+	if ((await playerCount(lobbyId)) < 1) {
+		throw new Error('Lobby does not meet minimum players');
+	}
+
+	// Update state
+	await setStatus(lobbyId, 'IN_PROGRESS');
+
+	// Create the game
+	return game.create(lobbyId);
 }
