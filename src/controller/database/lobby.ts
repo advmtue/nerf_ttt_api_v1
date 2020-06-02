@@ -65,7 +65,7 @@ export async function create(ownerId: number, name: string) {
 
 	// Pull the lobby for returning
 	const q2 = await connection.query(
-		'SELECT * FROM lobby_public WHERE owner_id = $1 and name = $2 LIMIT 1',
+		'SELECT * FROM lobby_public WHERE owner_id = $1 and name = $2 ORDER BY id DESC LIMIT 1',
 		[ownerId, name],
 	);
 
