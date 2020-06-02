@@ -63,6 +63,8 @@ export class TTTAPI {
 }
 export default TTTAPI;
 
-new TTTAPI(3000).start().then(() => {
+new TTTAPI(3000).start()
+.then(() => {
 	logger.info('Ready to handle connections.');
-});
+})
+.catch(logger.error);
