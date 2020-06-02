@@ -476,3 +476,41 @@ export async function lobbyPlayerUnready(lobbyId: number | string, playerId: num
 		[lobbyId, playerId],
 	);
 }
+
+/**
+ * Start a lobby.
+ * Sets lobby_status = IN_PROGRESS
+ * Creates a new game from the given lobby
+ *
+ * We exec multiple queries to give finer details on errors.
+ * It is possible to do this in less queries
+ *
+ * @param lobbyId Lobby ID
+ * @param playerId Player ID
+ */
+export async function startLobby(lobbyId: number, playerId: number) {
+	// Check lobby state is WAITING
+	const state = await connection.query(
+		'SELECT lobby_status FROM lobby_public WHERE id = $1',
+		[lobbyId],
+	);
+
+	if (state.rowCount === 0) {
+		throw new Error('Could not find lobby specified');
+	} else if (state.rows[0].lobby_status !== 'WAITING') {
+		throw new Error('Lobby is not in waiting phase');
+	}
+
+	const update = await connection.query(
+		'UPDATE lobby SET lobby_status = $1 WHERE id = $2 AND owner_id = $3',
+		['IN_PROGRESS', lobbyId, playerId],
+	);
+
+	// If no update occurred, the player was not the gamemaster
+	if (update.rowCount === 0) {
+		throw new Error('Insufficient permission to start lobby');
+	}
+
+	// TODO Create game
+	return 1;
+}

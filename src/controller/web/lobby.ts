@@ -299,6 +299,42 @@ async function playerUnready(request: Request, response: Response) {
 }
 
 /**
+ * Start a lobby -> Transition to game
+ *
+ * @param request Express request
+ * @param response Express response
+ */
+async function startLobby(request: Request, response: Response) {
+	// Ensure the player has been attached to the request
+	if (!request.player) {
+		response.send(apiResponse.httpError(403));
+		return;
+	}
+
+	// Extract player and lobby
+	const { player } = request;
+	const lobbyId = Number(request.params.lobbyId);
+
+	let gameId;
+	try {
+		gameId = await db.startLobby(lobbyId, player.id);
+	} catch (error) {
+		logger.error('Failed to start lobby', error);
+		response.send(apiResponse.error(1, error.message));
+		return;
+	}
+
+	// Send success response to player
+	response.send(apiResponse.success());
+
+	// Notify the lobby group
+	io.to(`lobby ${lobbyId}`).emit('lobbyStarted', gameId);
+
+	// Notify the main page listeners
+	io.to('lobbyListUpdate').emit('lobbyStarted', { id: lobbyId });
+}
+
+/**
  * Apply lobby specific routes to an express router
  *
  * @param router Express Router to modify
@@ -329,5 +365,8 @@ export function applyRoutes(router: Router): void {
 	// Ready up
 	router.get('/lobby/:lobbyId/ready', [checkAuth, playerReady]);
 	router.get('/lobby/:lobbyId/unready', [checkAuth, playerUnready]);
+
+	// Gamemaster start lobby
+	router.put('/lobby/:lobbyId/start', [checkAuth, startLobby]);
 }
 export default applyRoutes;
