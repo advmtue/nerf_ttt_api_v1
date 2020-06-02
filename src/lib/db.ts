@@ -383,14 +383,36 @@ export async function lobbyGetOwnerProfile(lobbyId: number) {
  *
  * @param lobbyId Lobby ID
  * @param playerId Player ID
+ *
+ * @returns New lobby player count
  */
 export async function lobbyAddPlayer(lobbyId: number | string, playerId: number) {
-	// TODO: Check lobby status
+	// Ensure the lobby is in waiting phase
+	const status = await connection.query(
+		'SELECT lobby_status, player_count FROM lobby_public WHERE id = $1',
+		[lobbyId],
+	);
 
-	await connection.query(
+	if (status.rowCount === 0) {
+		// Lobby probably doesn't exist
+		throw new Error('Lobby not found');
+	} else if (status.rows[0].lobby_status !== 'WAITING') {
+		// Lobby is not in the WAITING phase
+		throw new Error('Lobby not in waiting phase');
+	}
+
+	// Attempt to add the player to the lobby
+	const add = await connection.query(
 		'INSERT INTO lobby_player (lobby_id, player_id) VALUES ($1, $2)',
 		[lobbyId, playerId],
 	);
+
+	if (add.rowCount === 0) {
+		throw new Error('Failed to add player to lobby');
+	}
+
+	// Return the new lobby player count
+	return status.rows[0].player_count + 1;
 }
 
 /**
@@ -398,12 +420,36 @@ export async function lobbyAddPlayer(lobbyId: number | string, playerId: number)
  *
  * @param lobbyId Lobby ID
  * @param playerId Player ID
+ *
+ * @returns New lobby player count
  */
 export async function lobbyRemovePlayer(lobbyId: number | string, playerId: number) {
-	await connection.query(
+	// Ensure the lobby is in waiting phase
+	const status = await connection.query(
+		'SELECT lobby_status, player_count FROM lobby_public WHERE id = $1',
+		[lobbyId],
+	);
+
+	if (status.rowCount === 0) {
+		// Lobby probably doesn't exist
+		throw new Error('Lobby not found');
+	} else if (status.rows[0].lobby_status !== 'WAITING') {
+		// Lobby is not in the WAITING phase
+		throw new Error('Lobby not in waiting phase');
+	}
+
+	// Attempt to remove the player from the lobby
+	const add = await connection.query(
 		'DELETE FROM lobby_player WHERE lobby_id = $1 AND player_id = $2',
 		[lobbyId, playerId],
 	);
+
+	if (add.rowCount === 0) {
+		throw new Error('Failed to remove player from lobby');
+	}
+
+	// Return the new lobby player count
+	return status.rows[0].player_count - 1;
 }
 
 /**

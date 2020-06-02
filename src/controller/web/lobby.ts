@@ -8,9 +8,6 @@ import { checkAuth } from '../../lib/auth';
 import { logger } from '../../lib/logger';
 import * as apiResponse from '../../lib/apiresponse';
 
-// Interfaces
-import { Lobby } from '../../models/lobby';
-
 /**
  * HTTP endpoint for a player requesting to leave a lobby
  * The converse of joinLobby()
@@ -25,35 +22,25 @@ async function leaveLobby(request: Request, response: Response): Promise<void> {
 		return;
 	}
 
-	// Pull lobby info
-	let lobby: Lobby;
-	try {
-		lobby = await db.getLobby(request.params.lobbyId);
-	} catch {
-		response.send(apiResponse.httpError(404));
-		return;
-	}
+	const lobbyId = Number(request.params.lobbyId);
+	const playerId = player.id;
 
-	// Ensure the lobby exists and it is still in the WAITING phase
-	if (lobby === null || lobby.lobby_status !== 'WAITING') {
-		response.send(apiResponse.error(2, 'Lobby is either NULL or not WAITING'));
-		return;
-	}
-
-	// Remove the player from the lobby
+	// Attempt to remove the player from the lobby
+	let lobbyPlayerCount;
 	try {
-		await db.lobbyRemovePlayer(lobby.id, player.id);
+		// Throws an error if the player isn't in the lobby
+		lobbyPlayerCount = await db.lobbyRemovePlayer(lobbyId, playerId);
 	} catch (error) {
 		logger.error(error);
-		response.send(apiResponse.error(1, 'Failed to remove player from lobby.'));
+		response.send(apiResponse.error(1, error.message));
 		return;
 	}
 
 	// Notify the lobby room that they player has left
-	io.to(`lobby ${lobby.id}`).emit('playerLeave', player);
+	io.to(`lobby ${lobbyId}`).emit('playerLeave', player);
 
 	// Notify the lobby list viewers of a player differential
-	io.to('lobbyListUpdate').emit('lobbyPlayerChange', { lobby: lobby.id, change: -1 });
+	io.to('lobbyListUpdate').emit('lobbyPlayerChange', { lobby: lobbyId, change: lobbyPlayerCount });
 
 	// Let the client know their request succeeded, and they have left the lobby
 	response.send(apiResponse.success());
@@ -74,28 +61,16 @@ async function joinLobby(request: Request, response: Response): Promise<void> {
 		return;
 	}
 
-	// Pull lobby information
-	let lobby: Lobby;
-	try {
-		lobby = await db.getLobby(request.params.lobbyId);
-	} catch {
-		response.send(apiResponse.httpError(403));
-		return;
-	}
-
-	// Ensure the lobby exists and that it is in the WAITING phase
-	if (lobby === null || lobby.lobby_status !== 'WAITING') {
-		response.send(apiResponse.error(2, 'Lobby is either NULL or not WAITING'));
-		return;
-	}
+	const lobbyId = Number(request.params.lobbyId);
+	const playerId = player.id;
 
 	// Attempt to join the lobby
+	let lobbyPlayerCount: number;
 	try {
-		await db.lobbyAddPlayer(lobby.id, player.id);
+		lobbyPlayerCount = await db.lobbyAddPlayer(lobbyId, playerId);
 	} catch (error) {
-		// Failed to join (internal server error?)
-		// Send false status to player
-		response.send(apiResponse.error(1, 'Failed to add player to lobby'));
+		// Failed to join. Send error message to the user.
+		response.send(apiResponse.error(1, error.message));
 		return;
 	}
 
@@ -103,10 +78,10 @@ async function joinLobby(request: Request, response: Response): Promise<void> {
 	response.send(apiResponse.success());
 
 	// Update the lobby room with the new player
-	io.to(`lobby ${lobby.id}`).emit('playerJoin', player);
+	io.to(`lobby ${lobbyId}`).emit('playerJoin', player);
 
 	// Update the lobby list viewers with the player change diff
-	io.to('lobbyListUpdate').emit('lobbyPlayerChange', { lobby: lobby.id, change: 1 });
+	io.to('lobbyListUpdate').emit('lobbyPlayerChange', { lobby: lobbyId, change: lobbyPlayerCount });
 }
 
 /**
