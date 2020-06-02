@@ -5,6 +5,7 @@ import * as playerController from './player';
 import * as lobbyController from './lobby';
 import * as authController from './auth';
 import * as groupController from './group';
+import * as gameController from './game';
 
 /**
  * Create a router, apply controller endpoints and return it
@@ -18,6 +19,7 @@ export function createRouter(): Router {
 	lobbyController.applyRoutes(router);
 	authController.applyRoutes(router);
 	groupController.applyRoutes(router);
+	gameController.applyRoutes(router);
 
 	return router;
 }

@@ -55,6 +55,7 @@
     "express": "^4.17.1",
     "jsonwebtoken": "^8.5.1",
     "pg": "^8.0.0",
+    "pg-promise": "^10.5.6",
     "socket.io": "^2.3.0"
   }
 }

@@ -91,8 +91,6 @@ export async function close(lobbyId: number, byAdmin: boolean) {
 		'UPDATE lobby SET lobby_status = $1 WHERE "id" = $2',
 		[status, lobbyId],
 	);
-
-	return 1;
 }
 
 /**
