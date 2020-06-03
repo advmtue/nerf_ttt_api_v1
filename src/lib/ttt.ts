@@ -1,5 +1,6 @@
 import * as pgpromise from 'pg-promise';
 import { logger } from './logger';
+import { Game } from '../models/game';
 
 // TTT Related logic libs
 
@@ -21,6 +22,13 @@ function priestCount(playerCount: number) {
 function madmanCount(playerCount: number) {
 	// An occurence after each 12 players
 	return Math.floor(playerCount / 12);
+}
+
+export function filterGameState(game: Game, playerId: number) {
+	// Hide alive players status for non-traitor
+	if (playerId) { console.log(); }
+
+	return game;
 }
 
 export function buildRolesQuery(gameId: number, roles: {id: number, role: string}[]) {

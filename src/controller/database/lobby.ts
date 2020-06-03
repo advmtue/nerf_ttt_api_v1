@@ -1,49 +1,92 @@
 // Connection
 import { connection } from './connection';
 import * as game from './game';
+import * as player from './player';
 
 // Interfaces
 import { Player } from '../../models/player';
-import { Lobby } from '../../models/lobby';
-
-/**
- * Get the list of players who are participating in the lobby
- *
- * @param lobbyId The id of the lobby
- */
-export async function getPlayers(lobbyId: number | string): Promise<Player[]> {
-	const query = await connection.query(
-		'SELECT * FROM lobby_player_public WHERE lobby_id = $1',
-		[lobbyId],
-	);
-
-	return query.rows as Player[];
-}
-
-/**
- * Get the current list of lobbies that are in the WAITING phase
- */
-export async function getList() {
-	const q = await connection.query('SELECT * FROM lobby_public WHERE lobby_status = \'WAITING\'');
-	return q.rows as Lobby[];
-}
+import { Lobby, LobbyComplete } from '../../models/lobby';
 
 /**
  * Pull a single lobby by its ID
  *
  * @param lobbyId Lobby ID
  */
-export async function get(lobbyId: number | string) {
+export async function get(lobbyId: number): Promise<Lobby> {
 	const q = await connection.query(
-		'SELECT * FROM lobby_public WHERE id = $1',
+		'SELECT * FROM view_lobby_public WHERE id = $1',
 		[lobbyId],
 	);
 
+	// If no rows returned, lobby doesn't exist
 	if (q.rows.length === 0) {
 		throw new Error('Lobby query returned 0 rows');
 	}
 
-	return q.rows[0] as Lobby;
+	return {
+		id: Number(q.rows[0].id),
+		owner: await player.get(q.rows[0].owner_id),
+		name: q.rows[0].name,
+		date_created: new Date(q.rows[0].date_created),
+		status: q.rows[0].status,
+		player_count: Number(q.rows[0].player_count),
+	} as Lobby;
+}
+
+/**
+ * Get the current list of lobbies that are in the WAITING phase
+ */
+export async function getList() {
+	const lobbyIds = await connection.query('SELECT id FROM view_lobby_public WHERE status = \'WAITING\'');
+
+	const lobbyPromises: Promise<Lobby>[] = [];
+
+	lobbyIds.rows.forEach((l) => {
+		lobbyPromises.push(get(l.id));
+	});
+
+	return Promise.all(lobbyPromises);
+}
+
+/**
+ * Get player info for all players in a lobby.
+ * TODO: Refactor, this is gross af.
+ *
+ * @param lobby Lobby
+ */
+export async function getPlayers(lobby: Lobby): Promise<Player[]> {
+	const playerIds = await connection.query(
+		'SELECT player_id FROM lobby_player WHERE lobby_id = $1',
+		[lobby.id],
+	);
+
+	const pp = playerIds.rows.map((p) => player.get(p.player_id));
+
+	return Promise.all(pp);
+}
+
+/**
+ * Get the ID's of players within a lobby who are ready
+ *
+ * @param lobby Lobby
+ */
+export async function getReadyPlayers(lobby: Lobby) {
+	const playerIds = await connection.query(
+		'SELECT player_id FROM lobby_player WHERE lobby_id = $1 AND ready = TRUE',
+		[lobby.id],
+	);
+
+	return playerIds.rows.map((p) => p.player_id as number);
+}
+
+export async function getComplete(lobbyId: number) {
+	const lobby = await get(lobbyId);
+
+	const lobbyFull = lobby as LobbyComplete;
+	lobbyFull.players = await getPlayers(lobby);
+	lobbyFull.ready_players = await getReadyPlayers(lobby);
+
+	return lobbyFull;
 }
 
 /**
@@ -52,10 +95,10 @@ export async function get(lobbyId: number | string) {
  * @param ownerId Owner of the lobby
  * @param name Lobby name
  */
-export async function create(ownerId: number, name: string) {
+export async function create(owner: Player, name: string) {
 	const q = await connection.query(
-		'INSERT INTO lobby (owner_id, name) VALUES ($1, $2)',
-		[ownerId, name],
+		'INSERT INTO lobby (owner_id, name) VALUES ($1, $2) RETURNING id',
+		[owner.id, name],
 	);
 
 	// Insertion failed, throw an error
@@ -63,18 +106,9 @@ export async function create(ownerId: number, name: string) {
 		throw new Error('Failed to create new lobby');
 	}
 
-	// Pull the lobby for returning
-	const q2 = await connection.query(
-		'SELECT * FROM lobby_public WHERE owner_id = $1 and name = $2 ORDER BY id DESC LIMIT 1',
-		[ownerId, name],
-	);
+	const lobbyId = q.rows[0].id;
 
-	// If the new lobby couldn't be retreived, fail with error
-	if (q2.rowCount !== 1) {
-		throw new Error('Failed to find new lobby');
-	}
-
-	return q2.rows[0] as Lobby;
+	return get(lobbyId);
 }
 
 /**
@@ -94,24 +128,6 @@ export async function close(lobbyId: number, byAdmin: boolean) {
 }
 
 /**
- * Pull the profile of a lobby owner
- *
- * @param lobbyId Lobby ID
- */
-export async function getOwner(lobbyId: number) {
-	const q = await connection.query(
-		'SELECT * FROM main.player_public WHERE id = (SELECT owner_id from main.lobby WHERE id = $1)',
-		[lobbyId],
-	);
-
-	if (q.rowCount !== 1) {
-		throw new Error('Player not found');
-	}
-
-	return q.rows[0] as Player;
-}
-
-/**
  * Add a player to a lobby
  *
  * @param lobbyId Lobby ID
@@ -119,17 +135,8 @@ export async function getOwner(lobbyId: number) {
  *
  * @returns New lobby player count
  */
-export async function addPlayer(lobbyId: number | string, playerId: number) {
-	// Ensure the lobby is in waiting phase
-	const status = await connection.query(
-		'SELECT lobby_status, player_count FROM lobby_public WHERE id = $1',
-		[lobbyId],
-	);
-
-	if (status.rowCount === 0) {
-		// Lobby probably doesn't exist
-		throw new Error('Lobby not found');
-	} else if (status.rows[0].lobby_status !== 'WAITING') {
+export async function addPlayer(lobby: Lobby, playerId: number) {
+	if (lobby.status !== 'WAITING') {
 		// Lobby is not in the WAITING phase
 		throw new Error('Lobby not in waiting phase');
 	}
@@ -137,7 +144,7 @@ export async function addPlayer(lobbyId: number | string, playerId: number) {
 	// Attempt to add the player to the lobby
 	const add = await connection.query(
 		'INSERT INTO lobby_player (lobby_id, player_id) VALUES ($1, $2)',
-		[lobbyId, playerId],
+		[lobby.id, playerId],
 	);
 
 	if (add.rowCount === 0) {
@@ -145,7 +152,7 @@ export async function addPlayer(lobbyId: number | string, playerId: number) {
 	}
 
 	// Return the new lobby player count
-	return status.rows[0].player_count + 1;
+	return lobby.player_count + 1;
 }
 
 /**
@@ -156,17 +163,8 @@ export async function addPlayer(lobbyId: number | string, playerId: number) {
  *
  * @returns New lobby player count
  */
-export async function removePlayer(lobbyId: number | string, playerId: number) {
-	// Ensure the lobby is in waiting phase
-	const status = await connection.query(
-		'SELECT lobby_status, player_count FROM lobby_public WHERE id = $1',
-		[lobbyId],
-	);
-
-	if (status.rowCount === 0) {
-		// Lobby probably doesn't exist
-		throw new Error('Lobby not found');
-	} else if (status.rows[0].lobby_status !== 'WAITING') {
+export async function removePlayer(lobby: Lobby, playerId: number) {
+	if (lobby.status !== 'WAITING') {
 		// Lobby is not in the WAITING phase
 		throw new Error('Lobby not in waiting phase');
 	}
@@ -174,7 +172,7 @@ export async function removePlayer(lobbyId: number | string, playerId: number) {
 	// Attempt to remove the player from the lobby
 	const add = await connection.query(
 		'DELETE FROM lobby_player WHERE lobby_id = $1 AND player_id = $2',
-		[lobbyId, playerId],
+		[lobby.id, playerId],
 	);
 
 	if (add.rowCount === 0) {
@@ -182,7 +180,7 @@ export async function removePlayer(lobbyId: number | string, playerId: number) {
 	}
 
 	// Return the new lobby player count
-	return status.rows[0].player_count - 1;
+	return lobby.player_count - 1;
 }
 
 /**
@@ -215,37 +213,9 @@ export async function setPlayerUnready(lobbyId: number | string, playerId: numbe
  *
  * @param lobbyId Lobby ID
  */
-export async function playersAreReady(lobbyId: number) {
-	const playerStates = await connection.query(
-		'SELECT ready FROM lobby_player WHERE lobby_id = $1',
-		[lobbyId],
-	);
-
-	// If there's no players in the lobby, it's not ready
-	if (playerStates.rowCount === 0) {
-		return false;
-	}
-
-	// If any players are not ready, fail
-	return !playerStates.rows.some((pl) => pl.ready === false);
-}
-
-/**
- * Get lobby state
- *
- * @param lobbyId Lobby ID
- */
-export async function state(lobbyId: number) {
-	const st = await connection.query(
-		'SELECT lobby_status FROM lobby_public WHERE id = $1',
-		[lobbyId],
-	);
-
-	if (st.rowCount === 0) {
-		throw new Error('Lobby not found');
-	}
-
-	return st.rows[0].lobby_status;
+export async function playersAreReady(lobby: Lobby) {
+	const readyPlayers = await getReadyPlayers(lobby);
+	return readyPlayers.length === lobby.player_count;
 }
 
 /**
@@ -257,7 +227,7 @@ export async function playerCount(lobbyId: number) {
 	return (await connection.query(
 		'SELECT COUNT(*) as player_count FROM lobby_player WHERE lobby_id = $1',
 		[lobbyId],
-	)).rows[0].player_count;
+	)).rows[0].player_count as number;
 }
 
 /**
@@ -266,10 +236,10 @@ export async function playerCount(lobbyId: number) {
  * @param lobbyId Lobby ID
  * @param status Status
  */
-export async function setStatus(lobbyId: number, status: string) {
+export async function setStatus(lobby: Lobby, status: string) {
 	return connection.query(
 		'UPDATE lobby SET lobby_status = $1 WHERE id = $2',
-		[status, lobbyId],
+		[status, lobby.id],
 	);
 }
 
@@ -284,30 +254,30 @@ export async function setStatus(lobbyId: number, status: string) {
  * @param lobbyId Lobby ID
  * @param playerId Player ID
  */
-export async function start(lobbyId: number, playerId: number) {
+export async function start(lobby: Lobby, playerId: number) {
 	// Ensure the calling player is gamemaster
-	if ((await getOwner(lobbyId)).id !== playerId) {
+	if (lobby.owner.id !== playerId) {
 		throw new Error('You are not the gamemaster');
 	}
 
 	// Ensure state is still in 'WAITING'
-	if (await state(lobbyId) !== 'WAITING') {
+	if (lobby.status !== 'WAITING') {
 		throw new Error('Lobby is not in WAITING phase');
 	}
 
 	// Ensure all players are ready
-	if (!(await playersAreReady(lobbyId))) {
+	if (!(await playersAreReady(lobby))) {
 		throw new Error('Players are not ready');
 	}
 
 	// Ensure there are the minimum number of players
-	if ((await playerCount(lobbyId)) < 1) {
+	if (lobby.player_count < 3) {
 		throw new Error('Lobby does not meet minimum players');
 	}
 
 	// Update state
-	await setStatus(lobbyId, 'IN_PROGRESS');
+	await setStatus(lobby, 'IN_PROGRESS');
 
 	// Create the game
-	return game.create(lobbyId);
+	return game.create(lobby);
 }

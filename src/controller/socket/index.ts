@@ -32,30 +32,22 @@ async function joinLobby(this: SocketIO.Socket, lobbyId: number) {
  * @param token Player JWT
  */
 async function auth(this: SocketIO.Socket, token: string) {
-	const playerJwt = jwtlib.decode(token);
+	const playerId = jwtlib.decodeId(token);
 
-	let player;
+	// Pull corresponding player and associate with socket
 	try {
-		player = await db.player.get(playerJwt.id);
+		this.player = await db.player.get(playerId);
 	} catch (error) {
 		logger.error(error);
 		this.emit('auth', false);
 		return;
 	}
 
-	// Failed to auth a player with matching ID
-	if (player === null) {
-		this.emit('auth', false);
-		return;
-	}
-
-	this.player = player;
-	this.jwt = playerJwt;
 	// ACK
 	this.emit('auth', true);
 	// Join user room for any private messages
-	this.join(`player ${player.id}`);
-	logger.info(`Associated Socket#${this.id} with Player#${player.id}`);
+	this.join(`player ${this.player.id}`);
+	logger.info(`Associated Socket#${this.id} with Player#${this.player.id}`);
 }
 
 /**

@@ -7,9 +7,6 @@ import { logger } from './logger';
 import * as jwtlib from './jwt';
 import * as apiResponse from './apiresponse';
 
-// Interfaces
-import { Player } from '../models/player';
-
 /**
  * Express middleware which restricts only authenticated users to view a path
  *
@@ -25,19 +22,19 @@ export async function checkAuth(request: Request, response: Response, next: any)
 	}
 
 	// Decode the passed auth token into a UserInfoJwt
-	let userJwt;
+	let playerId;
 	try {
-		userJwt = jwtlib.decode(request.headers.authorization);
+		playerId = jwtlib.decodeId(request.headers.authorization);
 	} catch (error) {
 		logger.error(error);
-		response.sendStatus(403);
+		response.send(apiResponse.httpError(403));
 		return;
 	}
 
 	// Pull a user and assign it to the request context
-	let player: Player | null;
+	let player;
 	try {
-		player = await db.player.get(userJwt.id);
+		player = await db.player.get(playerId);
 	} catch (error) {
 		// Failed to pull user
 		logger.error(error);
@@ -45,13 +42,8 @@ export async function checkAuth(request: Request, response: Response, next: any)
 		return;
 	}
 
-	// Assign parts to the request
-	if (player !== null) {
-		request.player = player;
-		request.playerJwt = userJwt;
-		next();
-	} else {
-		response.send(apiResponse.httpError(403));
-	}
+	// Assign player to request
+	request.player = player;
+	next();
 }
 export default checkAuth;

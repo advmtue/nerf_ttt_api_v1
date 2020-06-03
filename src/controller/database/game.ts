@@ -2,7 +2,8 @@ import { connection } from './connection';
 
 import * as tttlib from '../../lib/ttt';
 import { logger } from '../../lib/logger';
-import { GameState, GameConfig, PlayerGameState } from '../../models/game';
+import { Game, GameConfig } from '../../models/game';
+import { Lobby } from '../../models/lobby';
 
 /**
  * Pull the latest game ID for a given lobby
@@ -29,20 +30,20 @@ export async function getLobbyLatest(lobbyId: number) {
  * @param lobbyId Lobby ID
  * @returns Game ID
  */
-export async function create(lobbyId: number) {
+export async function create(lobby: Lobby) {
 	// Create the new game
 	await connection.query(
 		'CALL new_game($1)',
-		[lobbyId],
+		[lobby.id],
 	);
 
 	// Get last gameId
-	const gameId = await getLobbyLatest(lobbyId);
+	const gameId = await getLobbyLatest(lobby.id);
 
 	// Get player IDs
 	const ids = await connection.query(
 		'SELECT player_id FROM lobby_player WHERE lobby_id = $1',
-		[lobbyId],
+		[lobby.id],
 	);
 
 	const idArray: number[] = [];
@@ -69,6 +70,7 @@ export async function create(lobbyId: number) {
  * @param gameId Game ID
  */
 export async function get(gameId: number) {
+	// Pull game base info
 	const q = await connection.query(
 		'SELECT * FROM game_public WHERE id = $1',
 		[gameId],
@@ -77,6 +79,21 @@ export async function get(gameId: number) {
 	if (q.rowCount === 0) {
 		throw new Error('Game not found');
 	}
+
+	const rolesQuery = await connection.query(
+		'SELECT player_id, role, alive FROM game_player WHERE game_id = $1',
+		[gameId],
+	);
+
+	const roles: { [id: number]: string } = {};
+	const alivePlayers: number[] = [];
+
+	rolesQuery.rows.forEach((pl) => {
+		roles[pl.player_id] = pl.role;
+		if (pl.alive) {
+			alivePlayers.push(pl.player_id);
+		}
+	});
 
 	// Determine seconds left
 	// TODO
@@ -88,15 +105,17 @@ export async function get(gameId: number) {
 	};
 
 	// Create gamestate structure
-	const gs: GameState = {
+	const gs: Game = {
 		id: q.rows[0].id,
 		lobby_id: q.rows[0].lobby_id,
 		seconds_left: 0, // TODO
 		round_number: q.rows[0].round_number,
 		config: c,
 		status: q.rows[0].status,
-		detectives: [], // TODO
+		roles,
+		players: [],
 		owner_id: q.rows[0].owner_id,
+		alive: alivePlayers,
 	};
 
 	return gs;
@@ -109,24 +128,8 @@ export async function get(gameId: number) {
  * @param playerId Player ID
  */
 export async function playerGameState(gameId: number, playerId: number) {
-	// Pull player game state
-	const playerInfo = await connection.query(
-		'SELECT role, alive FROM game_player WHERE player_id = $1',
-		[playerId],
-	);
-
-	// Player isn't part of this lobby
-	if (playerInfo.rowCount === 0) {
-		throw new Error('Player not found in lobby');
-	}
-
 	// Pull the game state
 	const gameInfo = await get(gameId);
 
-	const pgs = gameInfo as PlayerGameState;
-	pgs.role = playerInfo.rows[0].role;
-	pgs.alive = playerInfo.rows[0].alive;
-	pgs.buddies = [];
-
-	return pgs;
+	return tttlib.filterGameState(gameInfo, playerId);
 }

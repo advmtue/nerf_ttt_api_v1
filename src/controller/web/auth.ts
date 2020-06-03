@@ -5,8 +5,10 @@ import { Request, Response, Router } from 'express';
 import * as db from '../database';
 import { checkAuth } from '../../lib/auth';
 import * as apiResponse from '../../lib/apiresponse';
+import * as jwtlib from '../../lib/jwt';
 import { logger } from '../../lib/logger';
-import { InitialLogin } from '../../models/auth';
+
+import { PlayerLogin } from '../../models/player';
 
 /**
  * HTTP request for a player to change their password.
@@ -31,14 +33,15 @@ async function playerChangePassword(request: Request, response: Response): Promi
 		return;
 	}
 
-	// Extract user variables
-	const userId = request.player.id;
-
 	// Determine the status of updating the password in the database
 	try {
-		await db.player.changePassword(newPassword, userId, currentPassword);
-		const initial = await db.auth.createInitialLogin(userId);
-		response.send(apiResponse.success<InitialLogin>(initial));
+		// Change password
+		await db.player.changePassword(request.player, newPassword, currentPassword);
+
+		// The JWT is still valid so don't do anything
+
+		// Send response
+		response.send(apiResponse.success());
 	} catch (error) {
 		logger.error(error);
 		response.send(apiResponse.httpError(401));
@@ -63,11 +66,17 @@ async function playerPostLogin(request: Request, response: Response): Promise<vo
 
 	try {
 		// Pull a userId for this login
-		const userId = await db.player.getIdByLogin(username, password);
+		const player = await db.player.getByLogin(username, password);
 
-		// Create initial login package and send
-		const intial = await db.auth.createInitialLogin(userId);
-		response.send(apiResponse.success<InitialLogin>(intial));
+		// Create a JWT
+		const playerJwt = jwtlib.createToken(player);
+
+		// Send it
+		const loginPack: PlayerLogin = {
+			token: playerJwt,
+			player,
+		};
+		response.send(apiResponse.success(loginPack));
 	} catch (error) {
 		logger.error(error);
 		// Internal error

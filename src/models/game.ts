@@ -1,23 +1,38 @@
-import { PlayerProfile } from './player';
+import { Player } from './player';
 
 export interface GameConfig {
 	priest: boolean;
 	madman: boolean;
 }
 
-export interface GameState {
+export interface Game {
+	// Game ID
 	id: number;
-	lobby_id: number;
-	seconds_left: number;
-	round_number: number;
-	config: GameConfig | null;
-	status: string;
-	detectives: PlayerProfile[];
-	owner_id: number;
-}
 
-export interface PlayerGameState extends GameState {
-	role: 'INNOCENT' | 'TRAITOR' | 'MADMAN' | 'PRIEST' | 'DETECTIVE';
-	buddies: PlayerProfile[];
-	alive: boolean;
+	// Corresponding lobby id
+	lobby_id: number;
+
+	// Time remaining
+	seconds_left: number;
+
+	// Round number
+	round_number: number;
+
+	// Config
+	config: GameConfig | null;
+
+	// Game status
+	status: string;
+
+	// Roles: <playerID, roleName>
+	roles: { [id: number]: string }
+
+	// Alive players
+	alive: number[];
+
+	// Owner of lobby
+	owner_id: number;
+
+	// Players
+	players: Player[];
 }

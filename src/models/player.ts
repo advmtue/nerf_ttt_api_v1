@@ -1,19 +1,59 @@
+/**
+ * Basic player information
+ */
 export interface Player {
 	id: number;
-	first_name: string;
-	last_name: string;
+	name: string;
 	banned: boolean;
 	join_date: string;
-	group_name: string;
-	group_colour: string;
-	group_emoji: string;
-	group_icon_file: string;
+	groups: Group[];
+	permissions: Permission[];
+
+	// Fill password_reset if the correct auth is passed
+	password_reset?: boolean;
 }
 
-export interface PlayerProfile extends Player {
-	stats_kills: number;
-	stats_deaths: number;
-	stats_wins: number;
-	stats_losses: number;
-	stats_played: number
+/**
+ * A permission
+ */
+export interface Permission {
+	name: string;
+	description: string;
+}
+
+/**
+ * Individual group object
+ */
+export interface Group {
+	name: string;
+	colour: string;
+	emoji: string;
+	level: number;
+	description: string;
+}
+
+/**
+ * Stats object for player profile
+ */
+export interface PlayerStats {
+	kills: number;
+	deaths: number;
+	wins: number;
+	losses: number;
+	played: number
+}
+
+/**
+ * Extended profile
+ */
+export interface PlayerProfile extends Player{
+	stats: PlayerStats;
+}
+
+/**
+ * Login pack
+ */
+export interface PlayerLogin {
+	token: string;
+	player: Player;
 }

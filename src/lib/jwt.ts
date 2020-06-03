@@ -5,7 +5,7 @@ import * as jwt from 'jsonwebtoken';
 import { jwtConfig } from '../config';
 
 // Interfaces
-import { PlayerJwt } from '../models/auth';
+import { Player } from '../models/player';
 
 let jwtSecret = '';
 
@@ -23,30 +23,28 @@ export function setSecret(secret: string) {
  *
  * @param data A UserInfoJwt interface for a user's info
  */
-export function createToken(data: PlayerJwt): string {
+export function createToken(player: Player): string {
 	if (jwtSecret === '') {
 		throw new Error('Could not find jwt_secret');
 	}
 
 	return jwt.sign(
-		data,
+		{ id: player.id },
 		jwtSecret,
 		jwtConfig.options,
 	);
 }
 
 /**
- * Decode a jwt string into a UserInfoJwt
+ * Decode a JWT into a Player ID
  *
- * @param token String containing encoded UserInfoJwt interface
+ * @param token JWT String containing { id: number }
  */
-export function decode(token: string): PlayerJwt {
+export function decodeId(token: string): number {
 	if (jwtSecret === '') {
 		throw new Error('Could not find jwt_secret');
 	}
 
-	return jwt.verify(
-		token,
-		jwtSecret,
-	) as PlayerJwt;
+	const jwtData = jwt.verify(token, jwtSecret) as { id: number };
+	return jwtData.id;
 }

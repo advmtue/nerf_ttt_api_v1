@@ -25,11 +25,19 @@ async function leaveLobby(request: Request, response: Response): Promise<void> {
 	const lobbyId = Number(request.params.lobbyId);
 	const playerId = player.id;
 
+	let lobby;
+	try {
+		lobby = await db.lobby.get(lobbyId);
+	} catch (error) {
+		logger.error(error);
+		response.send(apiResponse.error(error.message));
+		return;
+	}
+
 	// Attempt to remove the player from the lobby
-	let lobbyPlayerCount;
 	try {
 		// Throws an error if the player isn't in the lobby
-		lobbyPlayerCount = await db.lobby.removePlayer(lobbyId, playerId);
+		await db.lobby.removePlayer(lobby, playerId);
 	} catch (error) {
 		logger.error(error);
 		response.send(apiResponse.error(1, error.message));
@@ -37,10 +45,10 @@ async function leaveLobby(request: Request, response: Response): Promise<void> {
 	}
 
 	// Notify the lobby room that they player has left
-	io.to(`lobby ${lobbyId}`).emit('playerLeave', player);
+	io.to(`lobby ${lobbyId}`).emit('playerLeave', player.id);
 
 	// Notify the lobby list viewers of a player differential
-	io.to('lobbyListUpdate').emit('lobbyPlayerChange', { lobby: lobbyId, change: lobbyPlayerCount });
+	io.to('lobbyListUpdate').emit('lobbyPlayerChange', { lobby: lobbyId, change: lobby.player_count - 1 });
 
 	// Let the client know their request succeeded, and they have left the lobby
 	response.send(apiResponse.success());
@@ -64,10 +72,19 @@ async function joinLobby(request: Request, response: Response): Promise<void> {
 	const lobbyId = Number(request.params.lobbyId);
 	const playerId = player.id;
 
-	// Attempt to join the lobby
-	let lobbyPlayerCount: number;
+	// Pull the lobby
+	let lobby;
 	try {
-		lobbyPlayerCount = await db.lobby.addPlayer(lobbyId, playerId);
+		lobby = await db.lobby.get(lobbyId);
+	} catch (error) {
+		logger.error(error);
+		response.send(apiResponse.error(error.message));
+		return;
+	}
+
+	// Attempt to join the lobby
+	try {
+		await db.lobby.addPlayer(lobby, playerId);
 	} catch (error) {
 		// Failed to join. Send error message to the user.
 		response.send(apiResponse.error(1, error.message));
@@ -81,24 +98,7 @@ async function joinLobby(request: Request, response: Response): Promise<void> {
 	io.to(`lobby ${lobbyId}`).emit('playerJoin', player);
 
 	// Update the lobby list viewers with the player change diff
-	io.to('lobbyListUpdate').emit('lobbyPlayerChange', { lobby: lobbyId, change: lobbyPlayerCount });
-}
-
-/**
- * HTTP endpoint for pulling lobby player listing
- *
- * @param request Express request object
- * @param response Express response object
- */
-async function getLobbyPlayers(request: Request, response: Response): Promise<void> {
-	try {
-		const players = await db.lobby.getPlayers(request.params.lobbyId);
-		response.send(apiResponse.success(players));
-	} catch (error) {
-		// Internal server error
-		logger.error(error);
-		response.send(apiResponse.httpError(500));
-	}
+	io.to('lobbyListUpdate').emit('lobbyPlayerChange', { lobby: lobbyId, change: lobby.player_count + 1 });
 }
 
 /**
@@ -123,9 +123,9 @@ async function getLobbyList(request: Request, response: Response): Promise<void>
  * @param request Express request object
  * @param response Express response object
  */
-async function getLobby(request: Request, response: Response): Promise<void> {
+async function getLobby(request: Request, response: Response) {
 	try {
-		const lobby = await db.lobby.get(request.params.lobbyId);
+		const lobby = await db.lobby.getComplete(Number(request.params.lobbyId));
 		response.send(apiResponse.success(lobby));
 	} catch (err) {
 		// Internal server error
@@ -142,23 +142,22 @@ async function getLobby(request: Request, response: Response): Promise<void> {
  */
 async function createLobby(request: Request, response: Response): Promise<void> {
 	// Ensure the body has actually been filled out
-	if (!request.body.name) {
+	const lobbyName = request.body.name;
+	if (!lobbyName) {
 		// Malformed request
 		response.send(apiResponse.httpError(400));
 		return;
 	}
 
-	const lobbyName = request.body.name;
-
-	// Pull the userid
-	const user = request.player;
-	if (!user) {
+	// Get the player
+	const { player } = request;
+	if (!player) {
 		response.send(apiResponse.httpError(403));
 		return;
 	}
 
-	// Pull user permissions
-	const hasPermission = await db.group.hasPermission(user.group_name, 'createLobby');
+	// Determine if player has permission to create lobby
+	const hasPermission = await db.player.hasPermission(player, 'createLobby');
 
 	// If the player doesn't have permission to make the request
 	if (!hasPermission) {
@@ -168,7 +167,7 @@ async function createLobby(request: Request, response: Response): Promise<void> 
 
 	// Create the lobby
 	try {
-		const lobby = await db.lobby.create(user.id, lobbyName);
+		const lobby = await db.lobby.create(player, lobbyName);
 
 		// Send success response
 		response.send(apiResponse.success(lobby));
@@ -200,19 +199,27 @@ async function deleteLobby(request: Request, response: Response): Promise<void> 
 		return;
 	}
 
+	// Get the lobby
+	let lobby;
+	try {
+		lobby = await db.lobby.get(lobbyId);
+	} catch (error) {
+		logger.error(error);
+		response.send(apiResponse.error(error.message));
+		return;
+	}
+
 	// Default to not being allowed to close this lobby
 	let canClose = false;
 
 	// If this is an admin trying to close the lobby
 	if (byAdmin) {
 		// Ensure the calling player has admin permissions
-		canClose = await db.group.hasPermission(player.group_name, 'closeLobby');
+		canClose = await db.player.hasPermission(player, 'closeLobby');
 	} else {
 		// Otherwise check that the player owns the lobby
 		try {
-			const ownerProfile = await db.lobby.getOwner(lobbyId);
-
-			if (ownerProfile.id === player.id) {
+			if (lobby.owner.id === player.id) {
 				canClose = true;
 			}
 		} catch (error) {
@@ -316,8 +323,10 @@ async function startLobby(request: Request, response: Response) {
 	const lobbyId = Number(request.params.lobbyId);
 
 	let gameId;
+	let lobby;
 	try {
-		gameId = await db.lobby.start(lobbyId, player.id);
+		lobby = await db.lobby.get(lobbyId);
+		gameId = await db.lobby.start(lobby, player.id);
 	} catch (error) {
 		logger.error(error);
 		response.send(apiResponse.error(1, error.message));
@@ -331,7 +340,7 @@ async function startLobby(request: Request, response: Response) {
 	io.to(`lobby ${lobbyId}`).emit('lobbyStarted', gameId);
 
 	// Notify the main page listeners
-	io.to('lobbyListUpdate').emit('lobbyStarted', lobbyId);
+	io.to('lobbyListUpdate').emit('lobbyStarted', lobby.id);
 }
 
 /**
@@ -345,9 +354,6 @@ export function applyRoutes(router: Router): void {
 
 	// Get single lobby
 	router.get('/lobby/:lobbyId', getLobby);
-
-	// Get players in a lobby
-	router.get('/lobby/:lobbyId/players', getLobbyPlayers);
 
 	// Create a new lobby
 	router.post('/lobby', [checkAuth, createLobby]);
