@@ -5,6 +5,11 @@ export interface GameConfig {
 	madman: boolean;
 }
 
+export interface GamePlayer extends Player {
+	role: string;
+	alive: boolean;
+}
+
 export interface Game {
 	// Game ID
 	id: number;
@@ -24,15 +29,9 @@ export interface Game {
 	// Game status
 	status: string;
 
-	// Roles: <playerID, roleName>
-	roles: { [id: number]: string }
-
-	// Alive players
-	alive: number[];
-
 	// Owner of lobby
 	owner_id: number;
 
 	// Players
-	players: Player[];
+	players: GamePlayer[];
 }

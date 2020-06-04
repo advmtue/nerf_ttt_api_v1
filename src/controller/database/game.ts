@@ -2,7 +2,7 @@ import { connection } from './connection';
 
 import * as tttlib from '../../lib/ttt';
 import { logger } from '../../lib/logger';
-import { Game, GameConfig } from '../../models/game';
+import { Game, GameConfig, GamePlayer } from '../../models/game';
 import { Lobby } from '../../models/lobby';
 
 /**
@@ -21,6 +21,24 @@ export async function getLobbyLatest(lobbyId: number) {
 	}
 
 	return q.rows[0].id;
+}
+
+export async function getPlayers(gameId: number) {
+	const q = await connection.query(
+		'SELECT role, alive, id, name, emoji, colour FROM view_game_players WHERE game_id = $1',
+		[gameId],
+	);
+
+	logger.warn(q.rows);
+
+	return q.rows.map((pl) => ({
+		id: pl.id,
+		name: pl.name,
+		emoji: pl.emoji,
+		colour: pl.colour,
+		role: pl.role,
+		alive: pl.alive,
+	} as GamePlayer));
 }
 
 /**
@@ -106,16 +124,14 @@ export async function get(gameId: number) {
 
 	// Create gamestate structure
 	const gs: Game = {
-		id: q.rows[0].id,
+		id: gameId,
 		lobby_id: q.rows[0].lobby_id,
 		seconds_left: 0, // TODO
 		round_number: q.rows[0].round_number,
 		config: c,
 		status: q.rows[0].status,
-		roles,
-		players: [],
+		players: await getPlayers(gameId),
 		owner_id: q.rows[0].owner_id,
-		alive: alivePlayers,
 	};
 
 	return gs;

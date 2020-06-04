@@ -5,19 +5,8 @@ import { connection } from './connection';
 import { hashPassword } from '../../lib/crypto';
 
 // Interfaces
-import {
-	Player,
-	PlayerProfile,
-	Permission,
-	Group,
-	PlayerStats,
-} from '../../models/player';
+import * as Player from '../../models/player';
 import { logger } from '../../lib/logger';
-
-const DEFAULT_USER_COLOUR = '#000000';
-const DEFAULT_USER_EMOJI = '';
-
-// import { logger } from '../../lib/logger';
 
 /**
  * Pull a player's groups list
@@ -30,7 +19,7 @@ export async function getGroups(playerId: number) {
 		[playerId],
 	);
 
-	return q.rows as Group[];
+	return q.rows as Player.Group[];
 }
 
 /**
@@ -39,10 +28,10 @@ export async function getGroups(playerId: number) {
  * @todo Actually implement this
  * @param playerId Player ID
  */
-export async function getStats(playerId: number): Promise<PlayerStats> {
+export async function getStats(playerId: number): Promise<Player.PlayerStats> {
 	logger.warn(`Pulling false stats for Player#${playerId}`);
 
-	const stats: PlayerStats = {
+	const stats: Player.PlayerStats = {
 		kills: 0,
 		deaths: 0,
 		wins: 0,
@@ -59,7 +48,7 @@ export async function getStats(playerId: number): Promise<PlayerStats> {
  *
  * @param playerId Player ID
  */
-export async function get(playerId: number): Promise<Player> {
+export async function get(playerId: number): Promise<Player.Player> {
 	const q = await connection.query(
 		'SELECT name, emoji, colour FROM view_player_basic WHERE id = $1',
 		[playerId],
@@ -70,11 +59,11 @@ export async function get(playerId: number): Promise<Player> {
 		throw new Error('No player found');
 	}
 
-	const player: Player = {
+	const player: Player.Player = {
 		id: playerId,
 		name: q.rows[0].name,
-		emoji: q.rows[0].emoji || DEFAULT_USER_EMOJI,
-		colour: q.rows[0].colour || DEFAULT_USER_COLOUR,
+		emoji: q.rows[0].emoji,
+		colour: q.rows[0].colour,
 	};
 
 	return player;
@@ -87,7 +76,7 @@ export async function get(playerId: number): Promise<Player> {
 export async function getList() {
 	const q = await connection.query('SELECT id FROM player');
 
-	const playerPromises: Promise<Player>[] = [];
+	const playerPromises: Promise<Player.Player>[] = [];
 	q.rows.forEach((p) => playerPromises.push(get(p.id)));
 
 	return Promise.all(playerPromises);
@@ -98,13 +87,13 @@ export async function getList() {
  *
  * @param playerId Player ID
  */
-export async function getPermissions(playerId: number): Promise<Permission[]> {
+export async function getPermissions(playerId: number): Promise<Player.Permission[]> {
 	const q = await connection.query(
 		'SELECT name, description FROM view_player_permissions WHERE player_id = $1',
 		[playerId],
 	);
 
-	return q.rows as Permission[];
+	return q.rows as Player.Permission[];
 }
 /**
  * Determine if a given player has a given permission.
@@ -148,7 +137,7 @@ export async function changePassword(playerId: number, pw: string, curPw: string
  * @param username User name
  * @param pw Plaintext password
  */
-export async function getByLogin(username: string, pw: string): Promise<Player> {
+export async function getByLogin(username: string, pw: string): Promise<Player.Player> {
 	// Hash the user password
 	const hashedPw = await hashPassword(pw);
 
@@ -170,7 +159,10 @@ export async function getByLogin(username: string, pw: string): Promise<Player> 
  *
  * @param playerId Player ID
  */
-export async function getProfile(playerId: number, showReset?: boolean): Promise<PlayerProfile> {
+export async function getProfile(
+	playerId: number,
+	showReset?: boolean,
+): Promise<Player.PlayerProfile> {
 	// Pull base profile information
 	const q = await connection.query(
 		'SELECT * FROM view_player_profile WHERE id = $1',
@@ -183,11 +175,11 @@ export async function getProfile(playerId: number, showReset?: boolean): Promise
 
 	const player = q.rows[0];
 
-	const profile: PlayerProfile = {
+	const profile: Player.PlayerProfile = {
 		id: player.id,
 		name: player.name,
-		emoji: player.emoji || DEFAULT_USER_EMOJI,
-		colour: player.colour || DEFAULT_USER_COLOUR,
+		emoji: player.emoji,
+		colour: player.colour,
 		banned: player.banned,
 		join_date: player.join_date,
 		primary_group: player.primary_group,

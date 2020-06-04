@@ -25,7 +25,12 @@ function madmanCount(playerCount: number) {
 
 export function filterGameState(game: Game, playerId: number) {
 	// Hide alive players status for non-traitor
-	if (playerId) { console.log(); }
+	const playerRole = game.players.find((pl) => pl.id === playerId);
+
+	// If player isn't in the game, don't filter
+	if (!playerRole) {
+		return game;
+	}
 
 	return game;
 }

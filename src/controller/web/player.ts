@@ -42,7 +42,6 @@ async function getPlayerProfile(request: Request, response: Response): Promise<v
 	try {
 		// Sets showReset if calling player and requested IDs match
 		const profile = await db.player.getProfile(playerId, request.player.id === playerId);
-		logger.info(profile);
 		response.send(apiResponse.success(profile));
 	} catch (error) {
 		logger.error(error);
