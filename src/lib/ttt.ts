@@ -1,5 +1,4 @@
 import * as pgpromise from 'pg-promise';
-import { logger } from './logger';
 import { Game } from '../models/game';
 
 // TTT Related logic libs
@@ -48,7 +47,6 @@ export function buildRolesQuery(gameId: number, roles: {id: number, role: string
 		}
 	});
 
-	logger.warn(qs);
 	return qs;
 }
 

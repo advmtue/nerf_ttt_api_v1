@@ -4,12 +4,21 @@
 export interface Player {
 	id: number;
 	name: string;
+	emoji: string;
+	colour: string;
+}
+
+/**
+ * Full player profiled. Only pulled very occasionally
+ */
+export interface PlayerProfile extends Player {
 	banned: boolean;
 	join_date: string;
+	primary_group: string;
 	groups: Group[];
 	permissions: Permission[];
+	stats: PlayerStats;
 
-	// Fill password_reset if the correct auth is passed
 	password_reset?: boolean;
 }
 
@@ -28,7 +37,6 @@ export interface Group {
 	name: string;
 	colour: string;
 	emoji: string;
-	level: number;
 	description: string;
 }
 
@@ -44,16 +52,9 @@ export interface PlayerStats {
 }
 
 /**
- * Extended profile
- */
-export interface PlayerProfile extends Player{
-	stats: PlayerStats;
-}
-
-/**
  * Login pack
  */
 export interface PlayerLogin {
 	token: string;
-	player: Player;
+	player: PlayerProfile;
 }

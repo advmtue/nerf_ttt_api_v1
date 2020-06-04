@@ -12,30 +12,19 @@ import * as apiResponse from '../../lib/apiresponse';
  * HTTP endpoint for a player requesting to leave a lobby
  * The converse of joinLobby()
  *
- * @param request express request object
- * @param response express response object
+ * @param request Request
+ * @param response Response
  */
 async function leaveLobby(request: Request, response: Response): Promise<void> {
 	const { player } = request;
-	if (!player) {
-		response.send(apiResponse.httpError(403));
-		return;
-	}
-
 	const lobbyId = Number(request.params.lobbyId);
 	const playerId = player.id;
 
+	// Pull the lobby and remove the player
 	let lobby;
 	try {
 		lobby = await db.lobby.get(lobbyId);
-	} catch (error) {
-		logger.error(error);
-		response.send(apiResponse.error(error.message));
-		return;
-	}
 
-	// Attempt to remove the player from the lobby
-	try {
 		// Throws an error if the player isn't in the lobby
 		await db.lobby.removePlayer(lobby, playerId);
 	} catch (error) {
@@ -58,35 +47,20 @@ async function leaveLobby(request: Request, response: Response): Promise<void> {
  * HTTP endpoint for when a player tries to join a lobby
  * The converse of leaveLobby()
  *
- * @param request Express request object
- * @param response Express response object
+ * @param request Request
+ * @param response Response
  */
 async function joinLobby(request: Request, response: Response): Promise<void> {
-	// Get player information
 	const { player } = request;
-	if (player === undefined) {
-		response.send(apiResponse.httpError(403));
-		return;
-	}
-
 	const lobbyId = Number(request.params.lobbyId);
 	const playerId = player.id;
 
-	// Pull the lobby
 	let lobby;
 	try {
+		// Attempt to join the lobby
 		lobby = await db.lobby.get(lobbyId);
-	} catch (error) {
-		logger.error(error);
-		response.send(apiResponse.error(error.message));
-		return;
-	}
-
-	// Attempt to join the lobby
-	try {
 		await db.lobby.addPlayer(lobby, playerId);
 	} catch (error) {
-		// Failed to join. Send error message to the user.
 		response.send(apiResponse.error(1, error.message));
 		return;
 	}
@@ -120,6 +94,7 @@ async function getLobbyList(request: Request, response: Response): Promise<void>
 
 /**
  * HTTP endpoint for pulling an individual lobby
+ *
  * @param request Express request object
  * @param response Express response object
  */
@@ -151,13 +126,9 @@ async function createLobby(request: Request, response: Response): Promise<void> 
 
 	// Get the player
 	const { player } = request;
-	if (!player) {
-		response.send(apiResponse.httpError(403));
-		return;
-	}
 
 	// Determine if player has permission to create lobby
-	const hasPermission = await db.player.hasPermission(player, 'createLobby');
+	const hasPermission = await db.player.hasPermission(player.id, 'createLobby');
 
 	// If the player doesn't have permission to make the request
 	if (!hasPermission) {
@@ -194,10 +165,6 @@ async function deleteLobby(request: Request, response: Response): Promise<void> 
 
 	// Get the calling player
 	const { player } = request;
-	if (!player) {
-		response.send(apiResponse.httpError(403));
-		return;
-	}
 
 	// Get the lobby
 	let lobby;
@@ -205,7 +172,7 @@ async function deleteLobby(request: Request, response: Response): Promise<void> 
 		lobby = await db.lobby.get(lobbyId);
 	} catch (error) {
 		logger.error(error);
-		response.send(apiResponse.error(error.message));
+		response.send(apiResponse.error(1, error.message));
 		return;
 	}
 
@@ -215,7 +182,7 @@ async function deleteLobby(request: Request, response: Response): Promise<void> 
 	// If this is an admin trying to close the lobby
 	if (byAdmin) {
 		// Ensure the calling player has admin permissions
-		canClose = await db.player.hasPermission(player, 'closeLobby');
+		canClose = await db.player.hasPermission(player.id, 'closeLobby');
 	} else {
 		// Otherwise check that the player owns the lobby
 		try {
@@ -255,12 +222,7 @@ async function deleteLobby(request: Request, response: Response): Promise<void> 
  */
 async function playerReady(request: Request, response: Response) {
 	const { lobbyId } = request.params;
-	const playerId = request.player?.id;
-
-	if (!playerId) {
-		response.send(apiResponse.httpError(403));
-		return;
-	}
+	const playerId = request.player.id;
 
 	try {
 		await db.lobby.setPlayerReady(lobbyId, playerId);
@@ -282,14 +244,8 @@ async function playerReady(request: Request, response: Response) {
  * @param response Express response
  */
 async function playerUnready(request: Request, response: Response) {
-	const playerId = request.player?.id;
+	const playerId = request.player.id;
 	const { lobbyId } = request.params;
-
-	// No auth
-	if (!playerId) {
-		response.send(apiResponse.httpError(403));
-		return;
-	}
 
 	try {
 		await db.lobby.setPlayerUnready(lobbyId, playerId);
@@ -312,13 +268,6 @@ async function playerUnready(request: Request, response: Response) {
  * @param response Express response
  */
 async function startLobby(request: Request, response: Response) {
-	// Ensure the player has been attached to the request
-	if (!request.player) {
-		response.send(apiResponse.httpError(403));
-		return;
-	}
-
-	// Extract player and lobby
 	const { player } = request;
 	const lobbyId = Number(request.params.lobbyId);
 
@@ -349,10 +298,10 @@ async function startLobby(request: Request, response: Response) {
  * @param router Express Router to modify
  */
 export function applyRoutes(router: Router): void {
-	// Get lobby list
+	// Get lobby list :: NO AUTH
 	router.get('/lobby', getLobbyList);
 
-	// Get single lobby
+	// Get single lobby :: NO AUTH
 	router.get('/lobby/:lobbyId', getLobby);
 
 	// Create a new lobby

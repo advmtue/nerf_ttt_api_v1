@@ -36,9 +36,7 @@ async function playerChangePassword(request: Request, response: Response): Promi
 	// Determine the status of updating the password in the database
 	try {
 		// Change password
-		await db.player.changePassword(request.player, newPassword, currentPassword);
-
-		// The JWT is still valid so don't do anything
+		await db.player.changePassword(request.player.id, newPassword, currentPassword);
 
 		// Send response
 		response.send(apiResponse.success());
@@ -71,10 +69,12 @@ async function playerPostLogin(request: Request, response: Response): Promise<vo
 		// Create a JWT
 		const playerJwt = jwtlib.createToken(player);
 
+		const profile = await db.player.getProfile(player.id);
+
 		// Send it
 		const loginPack: PlayerLogin = {
 			token: playerJwt,
-			player,
+			player: profile,
 		};
 		response.send(apiResponse.success(loginPack));
 	} catch (error) {

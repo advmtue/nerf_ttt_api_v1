@@ -32,18 +32,13 @@ export async function checkAuth(request: Request, response: Response, next: any)
 	}
 
 	// Pull a user and assign it to the request context
-	let player;
 	try {
-		player = await db.player.get(playerId);
+		request.player = await db.player.get(playerId);
+		next();
 	} catch (error) {
 		// Failed to pull user
 		logger.error(error);
 		response.sendStatus(403);
-		return;
 	}
-
-	// Assign player to request
-	request.player = player;
-	next();
 }
 export default checkAuth;

@@ -8,11 +8,50 @@ import { hashPassword } from '../../lib/crypto';
 import {
 	Player,
 	PlayerProfile,
-	Group,
 	Permission,
+	Group,
+	PlayerStats,
 } from '../../models/player';
+import { logger } from '../../lib/logger';
+
+const DEFAULT_USER_COLOUR = '#000000';
+const DEFAULT_USER_EMOJI = '';
 
 // import { logger } from '../../lib/logger';
+
+/**
+ * Pull a player's groups list
+ *
+ * @param playerId Player ID
+ */
+export async function getGroups(playerId: number) {
+	const q = await connection.query(
+		'SELECT name, colour, emoji, description FROM view_player_groups WHERE player_id = $1',
+		[playerId],
+	);
+
+	return q.rows as Group[];
+}
+
+/**
+ * Pull a player's stats object
+ *
+ * @todo Actually implement this
+ * @param playerId Player ID
+ */
+export async function getStats(playerId: number): Promise<PlayerStats> {
+	logger.warn(`Pulling false stats for Player#${playerId}`);
+
+	const stats: PlayerStats = {
+		kills: 0,
+		deaths: 0,
+		wins: 0,
+		losses: 0,
+		played: 0,
+	};
+
+	return stats;
+}
 
 
 /**
@@ -21,9 +60,8 @@ import {
  * @param playerId Player ID
  */
 export async function get(playerId: number): Promise<Player> {
-	// Get player base information
 	const q = await connection.query(
-		'SELECT id, first_name, last_name, banned, join_date FROM player WHERE id = $1',
+		'SELECT name, emoji, colour FROM view_player_basic WHERE id = $1',
 		[playerId],
 	);
 
@@ -32,33 +70,19 @@ export async function get(playerId: number): Promise<Player> {
 		throw new Error('No player found');
 	}
 
-	// Get groups
-	const groups = (await connection.query(
-		'SELECT name, colour, emoji, level, description FROM view_player_groups WHERE player_id = $1',
-		[playerId],
-	)).rows as Group[];
-
-	// Get permissions list
-	const permissions = (await connection.query(
-		'SELECT name, description FROM view_player_permissions WHERE player_id = $1',
-		[playerId],
-	)).rows as Permission[];
-
 	const player: Player = {
-		id: q.rows[0].id,
-		name: `${q.rows[0].first_name} ${q.rows[0].last_name}`,
-		banned: q.rows[0].banned,
-		join_date: q.rows[0].join_date,
-		groups,
-		permissions,
+		id: playerId,
+		name: q.rows[0].name,
+		emoji: q.rows[0].emoji || DEFAULT_USER_EMOJI,
+		colour: q.rows[0].colour || DEFAULT_USER_COLOUR,
 	};
 
 	return player;
 }
 
 /**
- * The the full list of players
- * @todo Refactor this. It's horrific
+ * Pull the list of players from the DB
+ * @todo Maybe add a limit or search string
  */
 export async function getList() {
 	const q = await connection.query('SELECT id FROM player');
@@ -70,34 +94,29 @@ export async function getList() {
 }
 
 /**
- * Pull a player profile
+ * Pull a player's permissions list
  *
- * @param playerId Player's ID
+ * @param playerId Player ID
  */
-export async function getProfile(player: Player): Promise<PlayerProfile| null> {
-	// Extend with stats
-	// TODO: Implement stats
-	const playerProfile = player as PlayerProfile;
-	playerProfile.stats = {
-		kills: 0,
-		deaths: 0,
-		wins: 0,
-		losses: 0,
-		played: 0,
-	};
+export async function getPermissions(playerId: number): Promise<Permission[]> {
+	const q = await connection.query(
+		'SELECT name, description FROM view_player_permissions WHERE player_id = $1',
+		[playerId],
+	);
 
-	return playerProfile;
+	return q.rows as Permission[];
 }
-
 /**
- * Determine if a player has a given permission
+ * Determine if a given player has a given permission.
  *
- * @param player Player
+ * @param playerId Player ID
  * @param permName Permission name
  */
-export async function hasPermission(player: Player, permName: string) {
-	const hasAll = player.permissions.some((p) => p.name === 'all');
-	const hasPer = player.permissions.some((p) => p.name === permName);
+export async function hasPermission(playerId: number, permName: string) {
+	const permissions = await getPermissions(playerId);
+
+	const hasAll = permissions.some((p) => p.name === 'all');
+	const hasPer = permissions.some((p) => p.name === permName);
 
 	return hasAll || hasPer;
 }
@@ -105,17 +124,17 @@ export async function hasPermission(player: Player, permName: string) {
 /**
  * Change a player's password
  *
- * @param pw New password (Plain Text)
  * @param playerId Player ID
- * @param curPw Current password (Plain Text)
+ * @param pw New password
+ * @param curPw Current password
  */
-export async function changePassword(player: Player, pw: string, curPw: string) {
+export async function changePassword(playerId: number, pw: string, curPw: string) {
 	const pwHash = await hashPassword(pw);
 	const curpwHash = await hashPassword(curPw);
 
 	const q = await connection.query(
 		'UPDATE "player" SET "password_reset" = false, "password" = $1 WHERE "id" = $2 AND "password" = $3',
-		[pwHash, player.id, curpwHash],
+		[pwHash, playerId, curpwHash],
 	);
 
 	if (q.rowCount === 0) {
@@ -124,7 +143,7 @@ export async function changePassword(player: Player, pw: string, curPw: string) 
 }
 
 /**
- * Return playerID of matching login
+ * Return Player for matching login
  *
  * @param username User name
  * @param pw Plaintext password
@@ -144,4 +163,42 @@ export async function getByLogin(username: string, pw: string): Promise<Player> 
 
 	// Return as Promise<Player>
 	return get(q.rows[0].id);
+}
+
+/**
+ * Pull a player's full profile (expensive)
+ *
+ * @param playerId Player ID
+ */
+export async function getProfile(playerId: number, showReset?: boolean): Promise<PlayerProfile> {
+	// Pull base profile information
+	const q = await connection.query(
+		'SELECT * FROM view_player_profile WHERE id = $1',
+		[playerId],
+	);
+
+	if (q.rowCount === 0) {
+		throw new Error('No player found');
+	}
+
+	const player = q.rows[0];
+
+	const profile: PlayerProfile = {
+		id: player.id,
+		name: player.name,
+		emoji: player.emoji || DEFAULT_USER_EMOJI,
+		colour: player.colour || DEFAULT_USER_COLOUR,
+		banned: player.banned,
+		join_date: player.join_date,
+		primary_group: player.primary_group,
+		groups: await getGroups(playerId),
+		permissions: await getPermissions(playerId),
+		stats: await getStats(playerId),
+	};
+
+	if (showReset) {
+		profile.password_reset = player.password_reset;
+	}
+
+	return profile;
 }
