@@ -69,7 +69,7 @@ async function playerPostLogin(request: Request, response: Response): Promise<vo
 		// Create a JWT
 		const playerJwt = jwtlib.createToken(player);
 
-		const profile = await db.player.getProfile(player.id);
+		const profile = await db.player.getProfile(player.id, true);
 
 		// Send it
 		const loginPack: PlayerLogin = {

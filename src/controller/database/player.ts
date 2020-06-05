@@ -74,12 +74,9 @@ export async function get(playerId: number): Promise<Player.Player> {
  * @todo Maybe add a limit or search string
  */
 export async function getList() {
-	const q = await connection.query('SELECT id FROM player');
+	const q = await connection.query('SELECT * FROM view_player_basic');
 
-	const playerPromises: Promise<Player.Player>[] = [];
-	q.rows.forEach((p) => playerPromises.push(get(p.id)));
-
-	return Promise.all(playerPromises);
+	return q.rows as Player.Player[];
 }
 
 /**
