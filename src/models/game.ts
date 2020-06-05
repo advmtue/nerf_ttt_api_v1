@@ -1,8 +1,6 @@
 import { Player } from './player';
 
 export interface GameConfig {
-	priest: boolean;
-	madman: boolean;
 }
 
 export interface GamePlayer extends Player {

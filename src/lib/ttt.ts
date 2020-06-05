@@ -3,26 +3,22 @@ import { Game } from '../models/game';
 
 // TTT Related logic libs
 
-function traitorCount(playerCount: number) {
-	// An occurence before each 6 players
-	return Math.ceil(playerCount / 6);
-}
+/**
+ * Inline functions to pull the number of a specific role per number of players
+ */
+const roleRatios = {
+	'TRAITOR': (playerCount: number) => Math.ceil(playerCount / 6),
+	'DETECTIVE': (playerCount: number) => Math.ceil(playerCount / 9),
+};
 
-function detectiveCount(playerCount: number) {
-	// An occurence before each 9 players
-	return Math.ceil(playerCount / 9);
-}
-
-function priestCount(playerCount: number) {
-	// An occurence after each 12 players
-	return Math.floor(playerCount / 12);
-}
-
-function madmanCount(playerCount: number) {
-	// An occurence after each 12 players
-	return Math.floor(playerCount / 12);
-}
-
+/**
+ * From a given gamestate and a playerId, filter the players so that a full
+ * gamestate isn't sent to a player.
+ * Mitigates the issue of players viewing the object and seeing all roles
+ *
+ * @param game A given game state
+ * @param Player ID of a player that may or may not be in the game
+ */
 export function filterGameState(game: Game, playerId: number) {
 	// Hide alive players status for non-traitor
 	const playerRole = game.players.find((pl) => pl.id === playerId);
@@ -35,6 +31,17 @@ export function filterGameState(game: Game, playerId: number) {
 	return game;
 }
 
+/**
+ * Build a query to insert roles for a game into the database
+ * When this is called we generally don't have a gamestate, so need to pass gameId and role array.
+ *
+ * @todo Change structures to use param Game instead if possible.
+ *
+ * @param gameId Game ID
+ * @param roles {id: Player ID, role: Game Role}[]
+ *
+ * @returns roleQuery Parameterized query to push all players to a game
+ */
 export function buildRolesQuery(gameId: number, roles: {id: number, role: string}[]) {
 	let qs = 'INSERT INTO game_player (game_id, player_id, role, alive) VALUES ';
 	let first = true;
@@ -57,53 +64,45 @@ export function buildRolesQuery(gameId: number, roles: {id: number, role: string
 
 /**
  * Assign roles to a player list
+ *
  * @param playerList List of player IDs
  */
 export function assignRoles(playerList: number[]) {
-	const playerCount = playerList.length;
 	let unassigned = playerList;
 
-	let traitorLeft = traitorCount(playerCount);
-	let detectiveLeft = detectiveCount(playerCount);
-	let priestLeft = priestCount(playerCount);
-	let madmanLeft = madmanCount(playerCount);
+	let traitorCount = roleRatios['TRAITOR'](unassigned.length);
+	let detectiveCount = roleRatios['DETECTIVE'](unassigned.length);
 
 	// Allocated roles
 	const roles: {id: number, role: string}[] = [];
 
-	let assigned = false;
-	while (!assigned) {
-		// Pick a random player
+	/**
+	  Assignment:
+	  	Pick a random player from a pool of available players
+		For each role count, determine if we still need to allocate players
+			If so, allocate this player to that role
+			If not, allocate the player to innocent
+		Remove the player from the pool of avaialble players
+	*/
+
+	while (unassigned.length > 0) {
+		// Pick player from the pool of unassigned players
 		const pl = unassigned[Math.floor(Math.random() * unassigned.length)];
 
-		if (traitorLeft > 0) {
-			// Assign to traitor
+		if (traitorCount > 0) {
 			roles.push({ id: pl, role: 'TRAITOR' });
-			traitorLeft -= 1;
-		} else if (detectiveLeft > 0) {
-			// Assign to detective
+			traitorCount -= 1;
+		} else if (detectiveCount > 0) {
 			roles.push({ id: pl, role: 'DETECTIVE' });
-			detectiveLeft -= 1;
-		} else if (priestLeft) {
-			// Assign to priest
-			roles.push({ id: pl, role: 'PRIEST' });
-			priestLeft -= 1;
-		} else if (madmanLeft > 0) {
-			// Assign to madman
-			roles.push({ id: pl, role: 'MADMAN' });
-			madmanLeft -= 1;
+			detectiveCount -= 1;
 		} else {
+			// All roles have been filled, assign to innocent
 			roles.push({ id: pl, role: 'INNOCENT' });
 		}
 
-		// Remove player from pool
+		// Remove the player from the pool of available players
 		unassigned = unassigned.filter((ply) => ply !== pl);
-
-		if (unassigned.length === 0) {
-			assigned = true;
-		}
 	}
 
 	return roles;
 }
-export default assignRoles;

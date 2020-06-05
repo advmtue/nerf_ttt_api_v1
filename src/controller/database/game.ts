@@ -29,8 +29,6 @@ export async function getPlayers(gameId: number) {
 		[gameId],
 	);
 
-	logger.warn(q.rows);
-
 	return q.rows.map((pl) => ({
 		id: pl.id,
 		name: pl.name,
@@ -73,7 +71,6 @@ export async function create(lobby: Lobby) {
 
 	// Build the insert query string
 	const rolesQueryString = tttlib.buildRolesQuery(gameId, roles);
-	logger.info(rolesQueryString);
 
 	// Insert into DB
 	await connection.query(rolesQueryString);
@@ -116,10 +113,9 @@ export async function get(gameId: number) {
 	// Determine seconds left
 	// TODO
 
-	// Create config structure
+	// Assign game configuration
+	// TODO: Define the roles according to the game model
 	const c: GameConfig = {
-		priest: q.rows[0].config_priest || false,
-		madman: q.rows[0].config_madman || false,
 	};
 
 	// Create gamestate structure

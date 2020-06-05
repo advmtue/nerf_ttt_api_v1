@@ -47,6 +47,10 @@ function handle(logType: 'error' | 'warn' | 'info', info: any, extra?: any) {
 		console.log(colorizer('-----'));
 	}
 }
+
+/**
+ * Export the logger with different handlers
+ */
 export const logger = {
 	error: (error: Error) => handle('error', error),
 	info: (info: any, extra?: any) => handle('info', info, extra),
