@@ -95,21 +95,6 @@ export async function get(gameId: number) {
 		throw new Error('Game not found');
 	}
 
-	const rolesQuery = await connection.query(
-		'SELECT player_id, role, alive FROM game_player WHERE game_id = $1',
-		[gameId],
-	);
-
-	const roles: { [id: number]: string } = {};
-	const alivePlayers: number[] = [];
-
-	rolesQuery.rows.forEach((pl) => {
-		roles[pl.player_id] = pl.role;
-		if (pl.alive) {
-			alivePlayers.push(pl.player_id);
-		}
-	});
-
 	// Determine seconds left
 	// TODO
 
@@ -129,6 +114,7 @@ export async function get(gameId: number) {
 		players: await getPlayers(gameId),
 		owner_id: q.rows[0].owner_id,
 	};
+
 
 	return gs;
 }

@@ -1,15 +1,29 @@
 import * as pgpromise from 'pg-promise';
 import { Game } from '../models/game';
 
+import { logger } from './logger';
+
 // TTT Related logic libs
 
 /**
- * Inline functions to pull the number of a specific role per number of players
+ * Role Configuration
+ * @field ratio Function providing number of class members for a given player count
+ * @field filter How a roles array should be filtered based on given player role
  */
-const roleRatios = {
-	'TRAITOR': (playerCount: number) => Math.ceil(playerCount / 6),
-	'DETECTIVE': (playerCount: number) => Math.ceil(playerCount / 9),
-};
+const roleConfig = {
+	'TRAITOR': {
+		ratio: (playerCount: number) => Math.ceil(playerCount / 6),
+		can_see: ['INNOCENT', 'DETECTIVE', 'TRAITOR'],
+	},
+	'DETECTIVE': {
+		ratio: (playerCount: number) => Math.ceil(playerCount / 9),
+		can_see: ['INNOCENT', 'DETECTIVE'],
+	},
+	'INNOCENT': {
+		can_see: ['DETECTIVE'],
+	},
+}
+
 
 /**
  * From a given gamestate and a playerId, filter the players so that a full
@@ -21,12 +35,28 @@ const roleRatios = {
  */
 export function filterGameState(game: Game, playerId: number) {
 	// Hide alive players status for non-traitor
-	const playerRole = game.players.find((pl) => pl.id === playerId);
+	const player = game.players.find((pl) => pl.id === playerId);
 
 	// If player isn't in the game, don't filter
-	if (!playerRole) {
+	if (!player) {
+		logger.warn('Short circuit');
 		return game;
 	}
+
+	// Calling player's role
+	const playerRole = player.role;
+
+	// Roles that the calling player can see
+	const playerCanSee = roleConfig[playerRole].can_see;
+
+	// Any player role that shouldn't be see by caller is 'INNOCENT'
+	game.players = game.players.map((pl) => {
+		if (!playerCanSee.includes(pl.role)) {
+			// Reassign to false innocent
+			pl.role = 'INNOCENT';
+		}
+		return pl;
+	});
 
 	return game;
 }
@@ -70,8 +100,9 @@ export function buildRolesQuery(gameId: number, roles: {id: number, role: string
 export function assignRoles(playerList: number[]) {
 	let unassigned = playerList;
 
-	let traitorCount = roleRatios['TRAITOR'](unassigned.length);
-	let detectiveCount = roleRatios['DETECTIVE'](unassigned.length);
+	// Determine number of particular role
+	let traitorCount = roleConfig['TRAITOR'].ratio(unassigned.length);
+	let detectiveCount = roleConfig['DETECTIVE'].ratio(unassigned.length);
 
 	// Allocated roles
 	const roles: {id: number, role: string}[] = [];
