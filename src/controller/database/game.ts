@@ -95,8 +95,10 @@ export async function get(gameId: number) {
 		throw new Error('Game not found');
 	}
 
+
 	// Determine seconds left
 	// TODO
+	logger.info((q.rows[0].date_launched - Date.now()) / 1000);
 
 	// Assign game configuration
 	// TODO: Define the roles according to the game model
@@ -107,7 +109,7 @@ export async function get(gameId: number) {
 	const gs: Game = {
 		id: gameId,
 		lobby_id: q.rows[0].lobby_id,
-		seconds_left: 0, // TODO
+		next_time: q.rows[0].date_launched,
 		round_number: q.rows[0].round_number,
 		config: c,
 		status: q.rows[0].status,

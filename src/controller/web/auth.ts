@@ -85,6 +85,36 @@ async function playerPostLogin(request: Request, response: Response): Promise<vo
 }
 
 /**
+ * HTTP request for JWT login exchange
+ *
+ * @param request Express Request
+ * @param respose Express Respose
+ */
+async function playerPostAuthenticate(request: Request, response: Response) {
+	const { token } = request.body;
+
+	if (!token) {
+		response.send(apiResponse.httpError(400));
+		return;
+	}
+
+	// Decode the token
+	const playerId = jwtlib.decodeId(token);
+
+	try {
+		const loginPack: PlayerLogin = {
+			token,
+			player: await db.player.getProfile(playerId, true),
+		}
+
+		response.send(apiResponse.success(loginPack));
+	} catch (error) {
+		logger.error(error);
+		response.send(apiResponse.httpError(500));
+	}
+}
+
+/**
  * Apply auth specific routes to an express Router
  *
  * @param router Router to apply routes to
@@ -92,5 +122,6 @@ async function playerPostLogin(request: Request, response: Response): Promise<vo
 export function applyRoutes(router: Router): void {
 	router.post('/login', playerPostLogin);
 	router.put('/login', [checkAuth, playerChangePassword]);
+	router.post('/authenticate', playerPostAuthenticate);
 }
 export default applyRoutes;

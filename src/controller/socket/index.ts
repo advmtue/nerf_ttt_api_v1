@@ -8,6 +8,7 @@ import * as jwtlib from '../../lib/jwt';
  * @param this The calling socket
  */
 async function getLobbyList(this: SocketIO.Socket) {
+	logger.info('Socket requested lobby list');
 	const lobbies = await db.lobby.getList();
 	this.emit('getLobbyList', lobbies);
 	// Join the lobby update group

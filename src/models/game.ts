@@ -17,7 +17,7 @@ export interface Game {
 	lobby_id: number;
 
 	// Time remaining
-	seconds_left: number;
+	next_time: Date;
 
 	// Round number
 	round_number: number;
