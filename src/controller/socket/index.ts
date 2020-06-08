@@ -33,10 +33,9 @@ async function joinLobby(this: SocketIO.Socket, lobbyId: number) {
  * @param token Player JWT
  */
 async function auth(this: SocketIO.Socket, token: string) {
-	const playerId = jwtlib.decodeId(token);
-
 	// Pull corresponding player and associate with socket
 	try {
+		const playerId = jwtlib.decodeId(token);
 		this.player = await db.player.get(playerId);
 	} catch (error) {
 		logger.error(error);

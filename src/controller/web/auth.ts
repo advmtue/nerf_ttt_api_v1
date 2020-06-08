@@ -98,10 +98,11 @@ async function playerPostAuthenticate(request: Request, response: Response) {
 		return;
 	}
 
-	// Decode the token
-	const playerId = jwtlib.decodeId(token);
-
 	try {
+		// Decode the token
+		const playerId = jwtlib.decodeId(token);
+
+		// Assembe a login pack
 		const loginPack: PlayerLogin = {
 			token,
 			player: await db.player.getProfile(playerId, true),
