@@ -27,7 +27,6 @@ export interface PlayerProfile extends Player {
  */
 export interface Permission {
 	name: string;
-	description: string;
 }
 
 /**

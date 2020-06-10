@@ -1,67 +1,59 @@
 // Modules
-import * as express from 'express';
-import * as cors from 'cors';
 import * as http from 'http';
-import * as bodyParser from 'body-parser';
-import * as cookieParser from 'cookie-parser';
 
 // Controllers
-import { createRouter } from './controller/web';
+import { Database } from './controller/database';
+import { GameManager } from './controller/game';
+import { Socket } from './controller/socket'
+import { ExpressController } from './controller/web';
 
 // Libs
-import * as db from './controller/database';
-import * as iolib from './lib/io';
 import { logger } from './lib/logger';
 
-/**
- * TTTAPI main server instance. Houses express application and http server.
- *
- * Applies socket and web routing handlers.
- * Calls connect/init methods for db and io respectively.
+/** TODO: Give me some coole information
  */
 export class TTTAPI {
-	app: express.Application;
+	app: ExpressController;
 
-	port: number;
+	db: Database;
 
-	server: http.Server | undefined;
+	gc: GameManager;
 
-	constructor(port: number) {
+	io: Socket;
+
+	server: http.Server;
+
+	constructor(private port: number) {
 		logger.info('Starting TTT API server...');
-		this.app = express();
-		this.port = port;
-		this.server = http.createServer(this.app);
+
+		// ----- DATA LAYER
+		// Create database controller as event emitter
+		this.db = new Database();
+
+		// Create game controller as event emitter
+		this.gc = new GameManager();
+
+		// ----- ACCESS LAYER
+		this.app = new ExpressController(this.gc, this.db);
+		//		apply controllers
+
+		this.io = new Socket(this.gc, this.db);
+		//		apply controllers
+
+		// ----- AGGREGATE
+		this.server = this.app.listen(this.port);
+		this.io.attach(this.server);
 	}
 
 	async start(): Promise<void> {
-		// Setup middlewares
-		logger.info('Enabling middlewares');
-		this.app.use(cors());
-		this.app.use(bodyParser.json());
-		this.app.use(bodyParser.urlencoded({ extended: false }));
-		this.app.use(cookieParser());
-
 		// Connect database
 		logger.info('Connecting database');
-		await db.connect();
-
-		// Apply HTTP routes
-		logger.info('Applying routes');
-		this.app.use(createRouter());
-
-		// Start a http server
-		logger.info('Starting HTTP server');
-		this.server = this.app.listen(this.port);
-
-		// Attach IO to the server (applying routes)
-		logger.info('Attaching http server to socket server');
-		iolib.init(this.server);
+		await this.db.connect();
 
 		// Done
 		logger.info(`Successfully started TTT API server on port ${this.port}`);
 	}
 }
-export default TTTAPI;
 
 new TTTAPI(3000).start()
 	.then(() => {

@@ -5,26 +5,14 @@ import { cryptoConfig } from '../config';
 // Promisify pbkdf2 (makes the code cleaner below)
 const pbkdf2Promise = promisify(pbkdf2);
 
-let salt = '';
-
-/**
- * Allow external modules to set the salt
- * @param newSalt New Salt
- */
-export function setSalt(newSalt: string) {
-	salt = newSalt;
-}
-
 /**
  * Hash a user password using config file
  *
  * @param password Plaintext player password
+ * @param salt Hash salt
  * @returns Hashed password string
  */
-export async function hashPassword(password: string): Promise<string> {
-	if (salt === '') {
-		throw new Error('Could not find salt.');
-	}
+export async function hashPassword(password: string, salt: string): Promise<string> {
 
 	const key = await pbkdf2Promise(
 		password,
