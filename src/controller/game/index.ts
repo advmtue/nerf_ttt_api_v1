@@ -1,8 +1,10 @@
 import { GameRunner } from './game';
-import { Game, GamePlayer } from '../../models/game';
+import { Game, GameLobby, GamePlayer } from '../../models/game';
 import { logger } from '../../lib/logger';
 import { EventEmitter } from 'events';
 import { Player } from '../../models/player';
+
+import { filterGameState, gameRunnerToLobby } from '../../lib/utils';
 
 export class GameManager extends EventEmitter {
 	private activeGames: GameRunner[];
@@ -19,6 +21,11 @@ export class GameManager extends EventEmitter {
 		const g = new GameRunner(game);
 
 		this.activeGames.push(g);
+
+		// On game start, emit start event
+		g.on('start', () => this.emit('start', g.state));
+		g.on('end', () => this.emit('end', g.state));
+		g.on('pregame', () => this.emit('pregame', g.state));
 
 		// Emit newGame event
 		this.emit('new', game);
@@ -59,18 +66,21 @@ export class GameManager extends EventEmitter {
 		this.emit('gameStart', g);
 	}
 
-	getGameState(gameId: number) {
-		const g = this.get(gameId);
+	getGameState(gameId: number, player: Player) {
+		let g = this.get(gameId).state;
 
-		// TODO Clone/Cast
+		// Filter if ingame
+		if (g.status === 'INGAME' || g.status === 'PREGAME') {
+			g = filterGameState(g, player);
+		}
 
-		return g.state;
+		return g;
 	}
 
 	adminClose(gameId: number) {
 		const g = this.get(gameId);
 		g.closeGame(true);
-		this.emit('gameCloseAdmin', g);
+		this.emit('gameCloseAdmin', g.state);
 	}
 
 	/**
@@ -80,7 +90,7 @@ export class GameManager extends EventEmitter {
 	ownerClose(gameId: number) {
 		const g = this.get(gameId);
 		g.closeGame(false);
-		this.emit('gameCloseOwner', g);
+		this.emit('gameCloseOwner', g.state);
 	}
 
 	/**
@@ -92,7 +102,7 @@ export class GameManager extends EventEmitter {
 		const game = this.get(gameId);
 		const gamePlayer = game.playerJoin(player);
 
-		this.emit('playerJoin', game, gamePlayer);
+		this.emit('playerJoin', game.state, gamePlayer);
 		logger.info(`GAME#${game.id} (PlayerJoin) -- ${player.name}`);
 	}
 
@@ -105,7 +115,7 @@ export class GameManager extends EventEmitter {
 		const game = this.get(gameId);
 		game.playerLeave(player);
 
-		this.emit('playerLeave', game, player);
+		this.emit('playerLeave', game.state, player);
 		logger.info(`GAME#${game.id} (PlayerLeave) -- ${player.name}`);
 	}
 
@@ -118,7 +128,7 @@ export class GameManager extends EventEmitter {
 		const game = this.get(gameId);
 		game.playerReadyUp(player);
 
-		this.emit('playerReady', game, player)
+		this.emit('playerReady', game.state, player)
 	}
 
 	/**
@@ -130,12 +140,12 @@ export class GameManager extends EventEmitter {
 		const game = this.get(gameId);
 		game.playerUnready(player);
 
-		this.emit('playerUnready', game, player)
+		this.emit('playerUnready', game.state, player)
 	}
 
-	getLobbies() {
+	getLobbies(): GameLobby[] {
 		return this.activeGames
 			.filter((game) => game.state.status === 'LOBBY')
-			.map((gameR) => gameR.state);
+			.map(gameRunnerToLobby);
 	}
 }

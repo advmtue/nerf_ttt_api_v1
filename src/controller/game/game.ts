@@ -6,6 +6,7 @@ import { logger } from '../../lib/logger';
 import { Game, GamePlayer } from '../../models/game';
 import { Player } from '../../models/player';
 import * as Role from '../../models/gamerole';
+import { roleConfig } from '../../lib/utils';
 
 // Interface for logging kills.
 // Unsure how it's going to be used down the track
@@ -13,6 +14,11 @@ interface KillLog {
 	killer: number; // Player ID
 	victim: number; // Victim ID
 	timestamp: number; // Seconds into the round
+}
+
+const DEFAULTS = {
+	PREGAME_TIME: 60 * 1000,
+	GAME_LENGTH: 1 * 60 * 1000,
 }
 
 // Game instance, emits various events
@@ -158,14 +164,49 @@ export class GameRunner extends EventEmitter {
 		gPlayer.ready = false;
 	}
 
-	// Expose game status
-	get status() {
-		return this.game.status;
-	}
-
 	// Expose game id
 	get id() {
 		return this.game.id;
+	}
+
+	assignRoles() {
+		let unassigned = this.game.players;
+
+		// Determine number of particular role
+		let traitorCount = roleConfig['TRAITOR'].ratio(unassigned.length);
+		let detectiveCount = roleConfig['DETECTIVE'].ratio(unassigned.length);
+
+		/**
+		  Assignment:
+			Pick a random player from a pool of available players
+			For each role count, determine if we still need to allocate players
+				If so, allocate this player to that role
+				If not, allocate the player to innocent
+			Remove the player from the pool of avaialble players
+		*/
+
+		const roles: GamePlayer[] = [];
+
+		while (unassigned.length > 0) {
+			// Pick player from the pool of unassigned players
+			const pl = unassigned[Math.floor(Math.random() * unassigned.length)];
+
+			if (traitorCount > 0) {
+				pl.role = 'TRAITOR';
+				traitorCount -= 1;
+			} else if (detectiveCount > 0) {
+				pl.role = 'DETECTIVE';
+				detectiveCount -= 1;
+			} else {
+				// All roles have been filled, assign to innocent
+				pl.role = 'INNOCENT';
+			}
+
+			roles.push(pl);
+
+			// Remove the player from the pool of available players
+			unassigned = unassigned.filter((ply) => ply !== pl);
+		}
 	}
 
 	// Start the game
@@ -175,16 +216,38 @@ export class GameRunner extends EventEmitter {
 			return;
 		}
 
+		// Assign roles
+		this.assignRoles();
+
+		// Set game status
+		this.game.status = 'PREGAME';
+
+		logger.info(`GAME#${this.game.id} -- Pregame`);
+		this.emit('pregame');
+
+		// Set launch time
+		this.game.date_launched = new Date(Date.now() + DEFAULTS.PREGAME_TIME);
+
+		// Go into real game after 60 seconds
+		setTimeout(() => this.activate(), DEFAULTS.PREGAME_TIME);
+	}
+
+	activate() {
 		this.game.status = 'INGAME';
 
-		logger.info(`GAME#${this.game.id} -- Start`);
+		this.emit('start');
 
 		// End game in 10 seconds
-		setTimeout(() => this.endGame(), 10000);
+		this.game.date_ended = new Date(Date.now() + DEFAULTS.GAME_LENGTH);
+		setTimeout(() => this.endGame(), DEFAULTS.GAME_LENGTH);
 	}
 
 	endGame() {
 		this.game.status = 'ENDED';
+
+		// Clear all timers
+
+		this.emit('emit');
 
 		this.checkTimeWinConditions();
 	}

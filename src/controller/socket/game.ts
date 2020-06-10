@@ -3,6 +3,7 @@ import { Database } from '../database';
 
 // Libs
 import { logger } from '../../lib/logger';
+import { gameStateToLobby } from '../../lib/utils';
 
 // Models
 import { Game, GamePlayer } from '../../models/game';
@@ -31,9 +32,11 @@ export class SocketGameInController {
 
 	// Get a game and become a listener for events
 	getGame(socket: SocketIO.Socket, gameId: number) {
-		socket.join(`game ${gameId}`);
+		if (!socket.player) return;
+
 		try {
-			socket.emit('getGame', this.gc.getGameState(gameId));
+			socket.join(`game ${gameId}`);
+			socket.emit('getGame', this.gc.getGameState(gameId, socket.player));
 		} catch (error) {
 			logger.error(error);
 		}
@@ -52,6 +55,7 @@ export class SocketGameOutController {
 		gc.on('playerLeave', this.playerLeave.bind(this));
 		gc.on('playerReady', this.playerReady.bind(this));
 		gc.on('playerUnready', this.playerUnready.bind(this));
+		gc.on('pregame', this.gamePregame.bind(this));
 		gc.on('start', this.gameStart.bind(this));
 		gc.on('end', this.gameEnd.bind(this));
 		gc.on('playerDeath', this.playerDeath.bind(this));
@@ -80,11 +84,13 @@ export class SocketGameOutController {
 	// Player Joined
 	playerJoin(game: Game, player: GamePlayer) {
 		this.io.to(`game ${game.id}`).emit('playerJoin', player);
+		this.io.to('lobbyListUpdate').emit('lobbyPlayerChange', game.id, game.players.length);
 	}
 
 	// Player Left
 	playerLeave(game: Game, player: GamePlayer) {
 		this.io.to(`game ${game.id}`).emit('playerLeave', player.id);
+		this.io.to('lobbyListUpdate').emit('lobbyPlayerChange', game.id, game.players.length);
 	}
 
 	// Player Ready Up
@@ -102,6 +108,11 @@ export class SocketGameOutController {
 		this.io.to(`game ${game.id}`).emit('gameStart');
 	}
 
+	// Game pregame
+	gamePregame(game: Game) {
+		this.io.to(`game ${game.id}`).emit('gamePregame');
+	}
+
 	// Game end
 	// TODO Winning team?
 	gameEnd(game: Game) {
@@ -117,6 +128,7 @@ export class SocketGameOutController {
 	// New game created
 	newGame(game: Game) {
 		logger.info('LobbyListUpdate -> addLobby');
-		this.io.to('lobbyListUpdate').emit('addLobby', game);
+		const lobby = gameStateToLobby(game);
+		this.io.to('lobbyListUpdate').emit('addLobby', lobby);
 	}
 }
