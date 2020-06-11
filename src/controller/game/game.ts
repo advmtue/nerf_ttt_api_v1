@@ -169,6 +169,12 @@ export class GameRunner extends EventEmitter {
 		return this.game.id;
 	}
 
+	logPlayers() {
+		this.game.players.forEach(pl => {
+			logger.info(`GAME#${this.game.id} (${pl.role} - ${pl.name})`);
+		});
+	}
+
 	assignRoles() {
 		let unassigned = this.game.players;
 
@@ -205,8 +211,10 @@ export class GameRunner extends EventEmitter {
 			roles.push(pl);
 
 			// Remove the player from the pool of available players
-			unassigned = unassigned.filter((ply) => ply !== pl);
+			unassigned = unassigned.filter((ply) => ply.id !== pl.id);
 		}
+
+		console.log(this.game.players);
 	}
 
 	// Start the game

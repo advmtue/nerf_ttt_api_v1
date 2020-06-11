@@ -3,6 +3,7 @@ import { Game, GameLobby, GamePlayer } from '../../models/game';
 import { logger } from '../../lib/logger';
 import { EventEmitter } from 'events';
 import { Player } from '../../models/player';
+import * as _ from 'lodash';
 
 import { filterGameState, gameRunnerToLobby } from '../../lib/utils';
 
@@ -67,7 +68,10 @@ export class GameManager extends EventEmitter {
 	}
 
 	getGameState(gameId: number, player: Player) {
-		let g = this.get(gameId).state;
+		console.log('BEFORE ----');
+		this.get(gameId).logPlayers();
+
+		let g = _.cloneDeep(this.get(gameId).state);
 
 		// Filter if ingame
 		if (g.status === 'INGAME' || g.status === 'PREGAME') {
