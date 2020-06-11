@@ -66,6 +66,7 @@ export class DBGameController {
 			status: 'LOBBY',
 			owner: await this.db.player.get(ownerId),
 			players: [],
+			kills: [],
 		}
 
 		return g;
@@ -108,6 +109,7 @@ export class DBGameController {
 			status: q.rows[0].status,
 			players: await this.getPlayers(gameId),
 			owner: await this.db.player.get(q.rows[0].owner_id),
+			kills: [],
 		};
 
 

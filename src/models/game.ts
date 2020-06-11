@@ -35,6 +35,12 @@ export interface GamePlayer extends Player {
 	ready: boolean;
 }
 
+export interface Kill {
+	killer: GamePlayer;
+	victim: GamePlayer;
+	time: number;
+}
+
 // Fulll game information
 export interface Game {
 	// Game ID
@@ -63,4 +69,8 @@ export interface Game {
 
 	// Game name
 	name: string;
+
+	kills: Kill[];
+
+	winning_team?: Role.Innocent | Role.Traitor;
 }

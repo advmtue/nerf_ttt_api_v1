@@ -1,6 +1,7 @@
 /**
  * Game logic component
  */
+import * as _ from 'lodash';
 import { EventEmitter } from 'events';
 import { logger } from '../../lib/logger';
 import { Game, GamePlayer } from '../../models/game';
@@ -8,35 +9,25 @@ import { Player } from '../../models/player';
 import * as Role from '../../models/gamerole';
 import { roleConfig } from '../../lib/utils';
 
-// Interface for logging kills.
-// Unsure how it's going to be used down the track
-interface KillLog {
-	killer: number; // Player ID
-	victim: number; // Victim ID
-	timestamp: number; // Seconds into the round
+const DEFAULTS = {
+	PREGAME_TIME: 10 * 1000,
+	GAME_LENGTH: 20 * 60 * 1000,
 }
 
-const DEFAULTS = {
-	PREGAME_TIME: 60 * 1000,
-	GAME_LENGTH: 1 * 60 * 1000,
+// Helper function
+function secondsBetween(d1: Date, d2: Date) {
+	return Math.abs(Math.round((d1.valueOf() - d2.valueOf()) / 1000));
 }
 
 // Game instance, emits various events
 // TODO: List the events
 export class GameRunner extends EventEmitter {
-	private game: Game;
-	private kills: KillLog[];
 
-	constructor(game: Game) {
+	constructor(private game: Game) {
 		// Do event emitter things
 		super();
 
 		logger.info(`GAME#${game.id} -- Created`);
-
-		this.game = game;
-
-		// Init
-		this.kills = [];
 
 		const timeUntil = (new Date(game.date_created)).valueOf() - Date.now();
 
@@ -64,8 +55,10 @@ export class GameRunner extends EventEmitter {
 		}
 	}
 
+	// Return a deep clone of the game state
+	// Cloned so no externals can mess with it
 	get state() {
-		return this.game;
+		return _.cloneDeep(this.game);
 	}
 
 	// Retrieve a GamePlayer from a playerId
@@ -190,9 +183,6 @@ export class GameRunner extends EventEmitter {
 				If not, allocate the player to innocent
 			Remove the player from the pool of avaialble players
 		*/
-
-		const roles: GamePlayer[] = [];
-
 		while (unassigned.length > 0) {
 			// Pick player from the pool of unassigned players
 			const pl = unassigned[Math.floor(Math.random() * unassigned.length)];
@@ -208,13 +198,9 @@ export class GameRunner extends EventEmitter {
 				pl.role = 'INNOCENT';
 			}
 
-			roles.push(pl);
-
 			// Remove the player from the pool of available players
 			unassigned = unassigned.filter((ply) => ply.id !== pl.id);
 		}
-
-		console.log(this.game.players);
 	}
 
 	// Start the game
@@ -232,22 +218,21 @@ export class GameRunner extends EventEmitter {
 
 		logger.info(`GAME#${this.game.id} -- Pregame`);
 
-		// Set launch time
+		// Set launch and end dates
 		this.game.date_launched = new Date(Date.now() + DEFAULTS.PREGAME_TIME);
+		this.game.date_ended = new Date(this.game.date_launched.valueOf() + DEFAULTS.GAME_LENGTH);
 
-		// Go into real game after 60 seconds
+		// Activate game after pregame time
 		setTimeout(() => this.activate(), DEFAULTS.PREGAME_TIME);
+
+		// End game after pregame + game length
+		setTimeout(() => this.endGame(), DEFAULTS.PREGAME_TIME + DEFAULTS.GAME_LENGTH);
 
 		this.emit('pregame');
 	}
 
 	activate() {
 		this.game.status = 'INGAME';
-
-		// End game in 10 seconds
-		this.game.date_ended = new Date(Date.now() + DEFAULTS.GAME_LENGTH);
-		setTimeout(() => this.endGame(), DEFAULTS.GAME_LENGTH);
-
 		this.emit('start');
 	}
 
@@ -257,39 +242,43 @@ export class GameRunner extends EventEmitter {
 		// Clear all timers
 
 		this.checkTimeWinConditions();
-
-		this.emit('emit');
 	}
 
 	/**
 	 * Player registered their killer
 	 */
-	playerKilledPlayer(killer: GamePlayer, victim: GamePlayer) {
+	playerKilledPlayer(victimId: number, killerId: number) {
+		const victim = this.getPlayer(victimId);
+		const killer = this.getPlayer(killerId);
+
+		if (victim === null) {
+			throw new Error('Victim is not in this game');
+		}
+
+		if (killer === null) {
+			throw new Error('Killer is not in this game');
+		}
+
 		if (!victim.alive) {
 			logger.warn(`GAME#${this.game.id}(KILL-VICTIM) -- ${victim.name} not alive`);
-			return false;
-		} else if (!killer.alive) {
-			logger.warn(`GAME#${this.game.id}(KILL-KILLER) -- ${killer.name} not alive`);
-			return false;
+			throw new Error('Victim is already dead');
 		} else if (this.game.status !== 'INGAME') {
 			logger.warn(`GAME#${this.game.id}(KILL) -- Game not in progress`);
-			return false;
+			throw new Error('Game is not in progress');
 		}
 
 		// Add to kill log
-		this.kills.push({
-			killer: killer.id,
-			victim: victim.id,
-			timestamp: 0
+		this.game.kills.push({
+			killer,
+			victim,
+			time: secondsBetween(new Date(), this.game.date_launched || new Date()),
 		});
 
 		victim.alive = false;
 
-		this.emit('playerkilledPlayer', { killer, victim });
-
 		this.checkDeathWinConditions();
 
-		return true;
+		return victim;
 	}
 
 	// Game time expired
@@ -331,7 +320,11 @@ export class GameRunner extends EventEmitter {
 	// Register a team win
 	teamWin(teamName: Role.Innocent | Role.Traitor) {
 		logger.info(`GAME#${this.game.id} -- ${teamName} win`);
-		this.emit('gameEnd', { team: teamName });
+
+		this.game.status = 'ENDED';
+		this.game.winning_team = teamName;
+
+		this.emit('end');
 	}
 
 	// detectiveUseReveal(detective: GamePlayer, target: GamePlayer) {}

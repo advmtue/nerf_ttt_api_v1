@@ -8,6 +8,7 @@ import { gameStateToLobby } from '../../lib/utils';
 // Models
 import { Game, GamePlayer } from '../../models/game';
 import { filterGameState } from '../../lib/utils';
+import { GameRunner } from '../game/game';
 
 // Controller for externally generated events
 export class SocketGameInController {
@@ -23,6 +24,19 @@ export class SocketGameInController {
 	applyRoutes(socket: SocketIO.Socket) {
 		socket.on('getLobbyList', this.getLobbyList.bind(this, socket));
 		socket.on('getGame', this.getGame.bind(this, socket));
+		socket.on('playerRegisterDeath', this.playerRegisterDeath.bind(this, socket));
+	}
+
+	playerRegisterDeath(socket: SocketIO.Socket, gameId: number, killerId: number) {
+		console.log('playerRegisterDeath', gameId, killerId);
+		// Try to push the death to the GC
+		if (!socket.player) return;
+
+		try {
+			this.gc.playerRegisterDeath(gameId, socket.player.id, killerId);
+		} catch (error) {
+			logger.error(error);
+		}
 	}
 
 	// Get a lobby and become a listener for events
@@ -71,72 +85,72 @@ export class SocketGameOutController {
 	}
 
 	// Admin closed the game
-	gameCloseAdmin(game: Game) {
-		this.io.to(`game ${game.id}`).emit('gameCloseAdmin');
-		this.io.to('lobbyListUpdate').emit('removeLobby', game.id);
+	gameCloseAdmin(gr: GameRunner) {
+		this.io.to(`game ${gr.state.id}`).emit('gameCloseAdmin');
+		this.io.to('lobbyListUpdate').emit('removeLobby', gr.state.id);
 	}
 
 	// Owner closed the game
-	gameCloseOwner(game: Game) {
-		this.io.to(`game ${game.id}`).emit('gameCloseOwner');
-		this.io.to('lobbyListUpdate').emit('removeLobby', game.id);
+	gameCloseOwner(gr: GameRunner) {
+		this.io.to(`game ${gr.state.id}`).emit('gameCloseOwner');
+		this.io.to('lobbyListUpdate').emit('removeLobby', gr.state.id);
 	}
 
 	// Player Joined
-	playerJoin(game: Game, player: GamePlayer) {
-		this.io.to(`game ${game.id}`).emit('playerJoin', player);
-		this.io.to('lobbyListUpdate').emit('lobbyPlayerChange', game.id, game.players.length);
+	playerJoin(gr: GameRunner, player: GamePlayer) {
+		this.io.to(`game ${gr.state.id}`).emit('playerJoin', player);
+		this.io.to('lobbyListUpdate').emit('lobbyPlayerChange', gr.state.id, gr.state.players.length);
 	}
 
 	// Player Left
-	playerLeave(game: Game, player: GamePlayer) {
-		this.io.to(`game ${game.id}`).emit('playerLeave', player.id);
-		this.io.to('lobbyListUpdate').emit('lobbyPlayerChange', game.id, game.players.length);
+	playerLeave(gr: GameRunner, player: GamePlayer) {
+		this.io.to(`game ${gr.state.id}`).emit('playerLeave', player.id);
+		this.io.to('lobbyListUpdate').emit('lobbyPlayerChange', gr.state.id, gr.state.players.length);
 	}
 
 	// Player Ready Up
-	playerReady(game: Game, player: GamePlayer) {
-		this.io.to(`game ${game.id}`).emit('playerReady', player.id);
+	playerReady(gr: GameRunner, player: GamePlayer) {
+		this.io.to(`game ${gr.state.id}`).emit('playerReady', player.id);
 	}
 
 	// Player Unready
-	playerUnready(game: Game, player: GamePlayer) {
-		this.io.to(`game ${game.id}`).emit('playerUnready', player.id);
+	playerUnready(gr: GameRunner, player: GamePlayer) {
+		this.io.to(`game ${gr.state.id}`).emit('playerUnready', player.id);
 	}
 
 	// Game start
-	gameStart(game: Game) {
-		game.players.forEach((pl) => {
-			let gameState = filterGameState(game, pl);
-			this.io.to(`player $[player.id}`).emit('getGame', gameState);
+	gameStart(gr: GameRunner) {
+		gr.state.players.forEach((pl) => {
+			let gameState = filterGameState(gr.state, pl);
+			this.io.to(`player ${pl.id}`).emit('getGame', gameState);
 		});
 	}
 
 	// Game pregame
-	gamePregame(game: Game) {
-		game.players.forEach((pl) => {
-			let gameState = filterGameState(game, pl);
+	gamePregame(gr: GameRunner) {
+		gr.state.players.forEach((pl) => {
+			let gameState = filterGameState(gr.state, pl);
 			this.io.to(`player ${pl.id}`).emit('getGame', gameState);
 		});
-		// this.io.to(`game ${game.id}`).emit('gamePregame');
+		// this.io.to(`game ${gr.state.id}`).emit('gamePregame');
 	}
 
 	// Game end
 	// TODO Winning team?
-	gameEnd(game: Game) {
-		this.io.to(`game ${game.id}`).emit('gameEnd');
+	gameEnd(gr: GameRunner) {
+		this.io.to(`game ${gr.state.id}`).emit('getGame', gr.state);
 	}
 
 	// Player died
 	// TODO figure out who to filter this to
-	playerDeath(game: Game, player: GamePlayer) {
-		this.io.to(`game ${game.id}`).emit('playerDeath', player.id);
+	playerDeath(gr: GameRunner, player: GamePlayer) {
+		this.io.to(`game ${gr.state.id}`).emit('playerDeath', player.id);
 	}
 
 	// New game created
-	newGame(game: Game) {
+	newGame(gr: GameRunner) {
 		logger.info('LobbyListUpdate -> addLobby');
-		const lobby = gameStateToLobby(game);
+		const lobby = gameStateToLobby(gr.state);
 		this.io.to('lobbyListUpdate').emit('addLobby', lobby);
 	}
 }
