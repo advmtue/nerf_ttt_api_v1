@@ -2,15 +2,18 @@
 import * as http from 'http';
 
 // Controllers
+// -- Data
 import { Database } from './controller/database';
 import { GameManager } from './controller/game';
+// -- Access
 import { Socket } from './controller/socket'
 import { ExpressController } from './controller/web';
 
 // Libs
 import { logger } from './lib/logger';
 
-/** TODO: Give me some coole information
+/**
+ * TTT API main server. Houses all DB, GC, IO and HTTP controllers.
  */
 export class TTTAPI {
 	private app: ExpressController;
@@ -23,7 +26,7 @@ export class TTTAPI {
 
 	public server: http.Server | undefined;
 
-	constructor(private port: number) {
+	constructor() {
 		logger.info('Starting TTT API server...');
 
 		// ----- DATA LAYER
@@ -35,23 +38,28 @@ export class TTTAPI {
 		this.io = new Socket(this.gc, this.db);
 	}
 
-	async start(): Promise<void> {
+	/**
+	 * Connect the database and start listening on defined port
+	 * @param port Port number to listen on
+	 */
+	async start(port: number): Promise<void> {
 		// Connect database first
 		logger.info('Connecting database');
 		await this.db.connect();
 
 		// Enable access layer
-		this.server = this.app.listen(this.port);
+		this.server = this.app.listen(port);
 		this.io.attach(this.server);
 
 		// Done
-		logger.info(`Successfully started TTT API server on port ${this.port}`);
+		logger.info(`Successfully started TTT API server on port ${port}`);
 	}
 }
 
-const api = new TTTAPI(3000);
-api.start()
+const api = new TTTAPI();
+api.start(3000)
 	.then(() => {
+		// Good to go
 		logger.info('Ready to handle connections.');
 	})
 	.catch((error) => {

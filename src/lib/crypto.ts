@@ -8,7 +8,7 @@ const pbkdf2Promise = promisify(pbkdf2);
 /**
  * Hash a user password using config file
  *
- * @param password Plaintext player password
+ * @param password Plaintext password
  * @param salt Hash salt
  * @returns Hashed password string
  */

@@ -1,18 +1,14 @@
 import { Client } from 'pg';
-
-import * as tttlib from '../../lib/ttt';
-import { logger } from '../../lib/logger';
-
 import { Game, GameConfig, GamePlayer } from '../../models/game';
 import { Database } from './';
 
+/**
+ * DBGameController - Houses data access for game-related queries
+ * Most of the functionality is for pulling archived (ended) games.
+ */
 export class DBGameController {
 	constructor(private db: Database, private connection: Client) {
 	}
-
-	/**
-	 * DBGameController - Houses data access for game-related queries
-	 */
 
 	/**
 	 * Get players active in a game
@@ -36,11 +32,10 @@ export class DBGameController {
 	}
 
 	/**
-	 * Create a game derived from a given lobby
-	 * Assumes ALL preconditions have been met
+	 * Create a new game
 	 *
-	 * @param lobbyId Lobby ID
-	 * @returns Game ID
+	 * @param name Name of game
+	 * @param ownerId Unique ID of game owner
 	 */
 	async create(name: string, ownerId: number) {
 		// Insert a new game into the db
@@ -73,7 +68,7 @@ export class DBGameController {
 	}
 
 	/**
-	 * Get game state for game with matching ID
+	 * Pull information for a given gameID
 	 *
 	 * @param gameId Game ID
 	 */
@@ -89,12 +84,8 @@ export class DBGameController {
 		}
 
 
-		// Determine seconds left
-		// TODO
-		logger.info((q.rows[0].date_launched - Date.now()) / 1000);
-
-		// Assign game configuration
-		// TODO: Define the roles according to the game model
+		// TODO Define seconds left
+		// TODO Pull config
 		const c: GameConfig = {
 		};
 
@@ -116,23 +107,14 @@ export class DBGameController {
 		return gs;
 	}
 
+	/**
+	 * Admin close a game
+	 * @param gameId Game ID
+	 */
 	async adminClose(gameId: number) {
 		await this.connection.query(
 			'UPDATE game SET status = $1 WHERE id = $2',
 			['CLOSED_ADMIN', gameId]
 		);
-	}
-
-	/**
-	 * Pull the lobby state for a given player
-	 *
-	 * @param gameId  Game ID
-	 * @param playerId Player ID
-	 */
-	async playerGameState(gameId: number, playerId: number) {
-		// Pull the game state
-		const gameInfo = await this.get(gameId);
-
-		return tttlib.filterGameState(gameInfo, playerId);
 	}
 }

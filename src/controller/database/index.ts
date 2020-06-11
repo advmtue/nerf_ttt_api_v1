@@ -11,6 +11,9 @@ import { DBGameController } from './game';
 
 import { logger } from '../../lib/logger';
 
+/**
+ * Database access controller.
+ */
 export class Database extends EventEmitter {
 	protected connection: Client;
 
@@ -30,8 +33,12 @@ export class Database extends EventEmitter {
 		this.player = new DBPlayerController(this, this.connection);
 
 		// Subscribe to events?
-	 }
+	}
 
+	/**
+	 * Attempt to cojnnect and pull/generate secrets.
+	 * Any failure here should be considered fatal
+	 */
 	async connect() {
 		logger.info('Connecting PGSQL Client');
 		await this.connection.connect();
@@ -45,7 +52,7 @@ export class Database extends EventEmitter {
 		);
 
 		if (q.rowCount === 0) {
-			throw new Error('Unable to retrieve secrets. This should be fatal.');
+			throw new Error('Unable to retrieve secrets.');
 		}
 
 		// Assign
@@ -55,6 +62,10 @@ export class Database extends EventEmitter {
 		logger.info('Database ready.');
 	}
 
+	/**
+	 * Check if there's a salt stored.
+	 * Throw an error if there isn't any.
+	 */
 	get salt(): string {
 		if (!this.salt$) {
 			throw new Error('No salt found.');
@@ -62,6 +73,10 @@ export class Database extends EventEmitter {
 		return this.salt$;
 	}
 
+	/**
+	 * Check if theres jwtSecrets stored.
+	 * Throw an error if there isn't any
+	 */
 	get jwtSecret(): string {
 		if (!this.jwtSecret$) {
 			throw new Error('No secrets found.');

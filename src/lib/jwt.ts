@@ -10,7 +10,8 @@ import { Player } from '../models/player';
 /**
  * Create and sign a token using the jwt options from config
  *
- * @param data A UserInfoJwt interface for a user's info
+ * @param player Player to create a JWT for
+ * @param secret Signing secret
  */
 export function createToken(player: Player, secret: string): string {
 	return jwt.sign(
@@ -23,8 +24,8 @@ export function createToken(player: Player, secret: string): string {
 /**
  * Decode a JWT into a Player ID
  *
- * @param token JWT String containing { id: number }
- * @param secret JWT Secret
+ * @param token JWT String containing minimally { id: number }
+ * @param secret Signing secret
  */
 export function decodeId(token: string, secret: string): number {
 	const jwtData = jwt.verify(token, secret) as { id: number };

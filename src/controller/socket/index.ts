@@ -15,7 +15,6 @@ export class Socket {
 	// Database and GC connections
 	private io: SocketIO.Server;
 
-	private gameOut: SocketGameOutController;
 	private gameIn: SocketGameInController;
 
 	constructor(
@@ -29,10 +28,11 @@ export class Socket {
 		});
 
 		// outbound
-		this.gameOut = new SocketGameOutController(this.io, gc, db);
+		new SocketGameOutController(this.io, gc, db);
 
-		// inbound
+		// inbound -- Applies routes to authed sockets later
 		this.gameIn = new SocketGameInController(this.io, gc, db);
+
 	}
 
 	/**

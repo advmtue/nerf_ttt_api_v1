@@ -3,6 +3,10 @@ import { Game } from '../models/game';
 import { GameRunner } from '../controller/game/game';
 import { Player } from '../models/player';
 
+/**
+ * Configuration for what roles can do within the game
+ * @todo Make this into some sort of static method?
+ */
 export const roleConfig = {
 	'TRAITOR': {
 		ratio: (playerCount: number) => Math.ceil(playerCount / 6),
@@ -17,6 +21,10 @@ export const roleConfig = {
 	},
 }
 
+/**
+ * Convert a game state to GameLobby interface
+ * @todo remove most instances and replace with gr.toLobby()
+ */
 export function gameStateToLobby(game: Game) {
 	return {
 		id: game.id,
@@ -27,11 +35,24 @@ export function gameStateToLobby(game: Game) {
 	}
 }
 
+/**
+ * Convert a game runner to Lobby
+ * @todo Convert game to a class and add prototype
+ */
 export function gameRunnerToLobby(game: GameRunner) {
 	return gameStateToLobby(game.state);
 }
 
-// Assume we are taking a clone game state
+/**
+ * Filter the game state based on a given player's role in the game.
+ * If the player isn't in the game, don't filter.
+ * If the game state isn't INGAME or PREGAME, don't filter.
+ *
+ * Player can only see role.can_see, and their personal alive status.
+ *
+ * @param g Game state
+ * @param player Reference player
+ */
 export function filterGameState(g: Game, player: Player) {
 	// Only filter 'ACTIVE' game states
 	if (g.status !== 'INGAME' && g.status !== 'PREGAME') {
