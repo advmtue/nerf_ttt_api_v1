@@ -231,23 +231,24 @@ export class GameRunner extends EventEmitter {
 		this.game.status = 'PREGAME';
 
 		logger.info(`GAME#${this.game.id} -- Pregame`);
-		this.emit('pregame');
 
 		// Set launch time
 		this.game.date_launched = new Date(Date.now() + DEFAULTS.PREGAME_TIME);
 
 		// Go into real game after 60 seconds
 		setTimeout(() => this.activate(), DEFAULTS.PREGAME_TIME);
+
+		this.emit('pregame');
 	}
 
 	activate() {
 		this.game.status = 'INGAME';
 
-		this.emit('start');
-
 		// End game in 10 seconds
 		this.game.date_ended = new Date(Date.now() + DEFAULTS.GAME_LENGTH);
 		setTimeout(() => this.endGame(), DEFAULTS.GAME_LENGTH);
+
+		this.emit('start');
 	}
 
 	endGame() {
@@ -255,9 +256,9 @@ export class GameRunner extends EventEmitter {
 
 		// Clear all timers
 
-		this.emit('emit');
-
 		this.checkTimeWinConditions();
+
+		this.emit('emit');
 	}
 
 	/**

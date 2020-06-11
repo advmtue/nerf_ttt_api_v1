@@ -3,6 +3,8 @@ import { Game } from '../models/game';
 import { GameRunner } from '../controller/game/game';
 import { Player } from '../models/player';
 
+import * as _ from 'lodash';
+
 export const roleConfig = {
 	'TRAITOR': {
 		ratio: (playerCount: number) => Math.ceil(playerCount / 6),
@@ -32,17 +34,26 @@ export function gameRunnerToLobby(game: GameRunner) {
 }
 
 export function filterGameState(game: Game, player: Player) {
-	const gp = game.players.find(pl => pl.id === player.id);
+	// Make a deep clone of the game state so we don't ruin it
+	let g = _.cloneDeep(game);
+
+	// Only filter 'ACTIVE' game states
+	if (g.status !== 'INGAME' && g.status !== 'PREGAME') {
+		return g;
+	}
+
+	// Search for the filter player within game
+	const gp = g.players.find(pl => pl.id === player.id);
 
 	// Dont filter if player isn't in game
 	if (!gp) {
-		return game;
+		return g;
 	}
 
 	const playerRole = gp.role;
 	const playerCanSee = roleConfig[playerRole].can_see;
 
-	game.players = game.players.map(pl => {
+	g.players = g.players.map(pl => {
 		if (!playerCanSee.includes(pl.role)) {
 			pl.role = 'INNOCENT';
 			pl.alive = true;
@@ -50,5 +61,5 @@ export function filterGameState(game: Game, player: Player) {
 		return pl;
 	});
 
-	return game;
+	return g;
 }

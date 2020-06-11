@@ -68,17 +68,9 @@ export class GameManager extends EventEmitter {
 	}
 
 	getGameState(gameId: number, player: Player) {
-		console.log('BEFORE ----');
-		this.get(gameId).logPlayers();
+		const g = this.get(gameId);
 
-		let g = _.cloneDeep(this.get(gameId).state);
-
-		// Filter if ingame
-		if (g.status === 'INGAME' || g.status === 'PREGAME') {
-			g = filterGameState(g, player);
-		}
-
-		return g;
+		return filterGameState(g.state, player);
 	}
 
 	adminClose(gameId: number) {

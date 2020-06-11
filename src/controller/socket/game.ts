@@ -7,6 +7,7 @@ import { gameStateToLobby } from '../../lib/utils';
 
 // Models
 import { Game, GamePlayer } from '../../models/game';
+import { filterGameState } from '../../lib/utils';
 
 // Controller for externally generated events
 export class SocketGameInController {
@@ -105,12 +106,19 @@ export class SocketGameOutController {
 
 	// Game start
 	gameStart(game: Game) {
-		this.io.to(`game ${game.id}`).emit('gameStart');
+		game.players.forEach((pl) => {
+			let gameState = filterGameState(game, pl);
+			this.io.to(`player $[player.id}`).emit('getGame', gameState);
+		});
 	}
 
 	// Game pregame
 	gamePregame(game: Game) {
-		this.io.to(`game ${game.id}`).emit('gamePregame');
+		game.players.forEach((pl) => {
+			let gameState = filterGameState(game, pl);
+			this.io.to(`player ${pl.id}`).emit('getGame', gameState);
+		});
+		// this.io.to(`game ${game.id}`).emit('gamePregame');
 	}
 
 	// Game end
