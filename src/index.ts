@@ -13,50 +13,51 @@ import { logger } from './lib/logger';
 /** TODO: Give me some coole information
  */
 export class TTTAPI {
-	app: ExpressController;
+	private app: ExpressController;
 
-	db: Database;
+	private db: Database;
 
-	gc: GameManager;
+	private gc: GameManager;
 
-	io: Socket;
+	private io: Socket;
 
-	server: http.Server;
+	public server: http.Server | undefined;
 
 	constructor(private port: number) {
 		logger.info('Starting TTT API server...');
 
 		// ----- DATA LAYER
-		// Create database controller as event emitter
 		this.db = new Database();
-
-		// Create game controller as event emitter
 		this.gc = new GameManager();
 
 		// ----- ACCESS LAYER
 		this.app = new ExpressController(this.gc, this.db);
-		//		apply controllers
-
 		this.io = new Socket(this.gc, this.db);
-		//		apply controllers
-
-		// ----- AGGREGATE
-		this.server = this.app.listen(this.port);
-		this.io.attach(this.server);
 	}
 
 	async start(): Promise<void> {
-		// Connect database
+		// Connect database first
 		logger.info('Connecting database');
 		await this.db.connect();
+
+		// Enable access layer
+		this.server = this.app.listen(this.port);
+		this.io.attach(this.server);
 
 		// Done
 		logger.info(`Successfully started TTT API server on port ${this.port}`);
 	}
 }
 
-new TTTAPI(3000).start()
+const api = new TTTAPI(3000);
+api.start()
 	.then(() => {
 		logger.info('Ready to handle connections.');
 	})
-	.catch(logger.error);
+	.catch((error) => {
+		  logger.warn('Server died.')
+		  logger.error(error);
+
+		  // Fatal
+		  if (api.server) api.server.close();
+	});
