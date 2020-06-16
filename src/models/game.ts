@@ -33,6 +33,9 @@ export interface GamePlayer extends Player {
 
 	// Lobby readyup
 	ready: boolean;
+
+	// Number of detective reveals remaining
+	reveals?: number
 }
 
 export interface Kill {
@@ -73,4 +76,6 @@ export interface Game {
 	kills: Kill[];
 
 	winning_team?: Role.Innocent | Role.Traitor;
+
+	timer: number;
 }

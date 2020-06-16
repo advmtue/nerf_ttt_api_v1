@@ -62,6 +62,7 @@ export class DBGameController {
 			owner: await this.db.player.get(ownerId),
 			players: [],
 			kills: [],
+			timer: 0,
 		}
 
 		return g;
@@ -90,6 +91,7 @@ export class DBGameController {
 		};
 
 		// Create gamestate structure
+		// TODO Timer
 		const gs: Game = {
 			id: gameId,
 			name: q.rows[0].name,
@@ -101,6 +103,7 @@ export class DBGameController {
 			players: await this.getPlayers(gameId),
 			owner: await this.db.player.get(q.rows[0].owner_id),
 			kills: [],
+			timer: 0,
 		};
 
 

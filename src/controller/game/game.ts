@@ -1,6 +1,3 @@
-/**
- * Game logic component
- */
 import * as _ from 'lodash';
 import { EventEmitter } from 'events';
 import { logger } from '../../lib/logger';
@@ -9,60 +6,48 @@ import { Player } from '../../models/player';
 import * as Role from '../../models/gamerole';
 import { roleConfig } from '../../lib/utils';
 
+// Time defaults for game
+// TODO Ability to change with game config
 const DEFAULTS = {
-	PREGAME_TIME: 10 * 1000,
-	GAME_LENGTH: 20 * 60 * 1000,
+	PREGAME_TIME: 20,
+	GAME_LENGTH: 20 * 60,
+	DETECTIVE_REVEALS: 3,
 }
 
-// Helper function
+// Helper function to determine seconds between two dates
 function secondsBetween(d1: Date, d2: Date) {
 	return Math.abs(Math.round((d1.valueOf() - d2.valueOf()) / 1000));
 }
 
 // Game instance, emits various events
-// TODO: List the events
+// TODO: List the events as comments
 export class GameRunner extends EventEmitter {
 
+	private timerUpdate: NodeJS.Timeout | undefined;
+
 	constructor(private game: Game) {
-		// Do event emitter things
 		super();
-
-		logger.info(`GAME#${game.id} -- Created`);
-
-		const timeUntil = (new Date(game.date_created)).valueOf() - Date.now();
 
 		// Consider pregame
 		if (game.status === 'LOBBY') {
 			logger.info(`GAME#${game.id} -- Created lobby`);
 			// No timers or anything.
-		} else if (game.status === 'PREGAME') {
-			// Set a timer for game start
-
-			// debug: start game in 10 seconds
-			setTimeout(() => this.startGame(), timeUntil);
-		} else if (game.status === 'INGAME') {
-			// Set a timer for game end
-
-			// This route is only hit from crash recovery
-			// I don't know if its worth it
-
-			// End the game in 10 seconds
-			setTimeout(() => this.endGame(), 10000);
-		} else if (game.status === 'ENDED') {
-			logger.warn(`GAME#${game.id} -- Registered ended game`);
 		} else {
-			logger.warn(`GAME#${game.id} -- Registered cancelled game`);
+			logger.warn(`GAME#${game.id} -- Registration where status = ${this.game.status}`);
 		}
 	}
 
-	// Return a deep clone of the game state
-	// Cloned so no externals can mess with it
+	/**
+	 * Deep clone the game state and return it so users cannot modify it
+	 */
 	get state() {
 		return _.cloneDeep(this.game);
 	}
 
-	// Retrieve a GamePlayer from a playerId
-	// If the player is not in this game, return null;
+	/**
+	 * Attempt to retrieve a game player from playerId
+	 * If player is not in the game, returns null.
+	 */
 	getPlayer(playerId: number): GamePlayer | null {
 		const player = this.game.players.filter((pl) => pl.id === playerId);
 
@@ -90,19 +75,18 @@ export class GameRunner extends EventEmitter {
 	 * Player joined the lobby
 	 */
 	playerJoin(player: Player) {
-		// Ensure we are in the lobby phase
+		// Game must be in the lobby phase
 		if (this.game.status !== 'LOBBY') {
 			throw new Error('Cannot join game in progress.');
 		}
 
-		// Ensure the player isn't already in this game
+		// Player cannot already be in the game
 		if (this.getPlayer(player.id) !== null) {
 			throw new Error('Player is already in this game.');
 		}
 
 		// Extend the Player interface to GamePlayer
 		const gp: GamePlayer = player as GamePlayer;
-		// Assign defaults
 		gp.alive = true;
 		gp.role = 'INNOCENT';
 		gp.ready = false;
@@ -120,6 +104,7 @@ export class GameRunner extends EventEmitter {
 			throw new Error('Cannot leave game in progress.');
 		}
 
+		// Remove them from the lobby. Works if they aren't in it.
 		this.game.players = this.game.players.filter((pl) => pl.id !== player.id);
 	}
 
@@ -133,6 +118,7 @@ export class GameRunner extends EventEmitter {
 
 		const gPlayer = this.game.players.find(pl => pl.id === player.id);
 
+		// (Error) Player isn't in the game.
 		if (!gPlayer) {
 			throw new Error('Player is not in this game.');
 		}
@@ -150,6 +136,7 @@ export class GameRunner extends EventEmitter {
 
 		const gPlayer = this.game.players.find(pl => pl.id === player.id);
 
+		// (Error) Player isn't in the game.
 		if (!gPlayer) {
 			throw new Error('Player is not in this game.');
 		}
@@ -162,12 +149,9 @@ export class GameRunner extends EventEmitter {
 		return this.game.id;
 	}
 
-	logPlayers() {
-		this.game.players.forEach(pl => {
-			logger.info(`GAME#${this.game.id} (${pl.role} - ${pl.name})`);
-		});
-	}
-
+	/**
+	 * Allocate roles to all players within the game.
+	 */
 	assignRoles() {
 		let unassigned = this.game.players;
 
@@ -181,7 +165,7 @@ export class GameRunner extends EventEmitter {
 			For each role count, determine if we still need to allocate players
 				If so, allocate this player to that role
 				If not, allocate the player to innocent
-			Remove the player from the pool of avaialble players
+			Remove the player from the pool of available players
 		*/
 		while (unassigned.length > 0) {
 			// Pick player from the pool of unassigned players
@@ -193,6 +177,9 @@ export class GameRunner extends EventEmitter {
 			} else if (detectiveCount > 0) {
 				pl.role = 'DETECTIVE';
 				detectiveCount -= 1;
+				// Give the detective the default number of reveals
+				// TODO use game config
+				pl.reveals = DEFAULTS.DETECTIVE_REVEALS;
 			} else {
 				// All roles have been filled, assign to innocent
 				pl.role = 'INNOCENT';
@@ -218,28 +205,51 @@ export class GameRunner extends EventEmitter {
 
 		logger.info(`GAME#${this.game.id} -- Pregame`);
 
-		// Set launch and end dates
-		this.game.date_launched = new Date(Date.now() + DEFAULTS.PREGAME_TIME);
-		this.game.date_ended = new Date(this.game.date_launched.valueOf() + DEFAULTS.GAME_LENGTH);
+		// Start / End times
+		this.game.timer = DEFAULTS.PREGAME_TIME;
 
-		// Activate game after pregame time
-		setTimeout(() => this.activate(), DEFAULTS.PREGAME_TIME);
-
-		// End game after pregame + game length
-		setTimeout(() => this.endGame(), DEFAULTS.PREGAME_TIME + DEFAULTS.GAME_LENGTH);
+		// Emit a time update every 5 seconds
+		this.timerUpdate = setInterval(this.tick.bind(this), 1000);
 
 		this.emit('pregame');
 	}
 
+	tick() {
+		logger.info(`GAME#${this.game.id} tick = ${this.game.timer}`);
+
+		this.game.timer--;
+
+		// Update timer on 10th second, assume not a game state change
+		if (this.game.timer % 10 === 0 && this.game.timer !== 0) {
+			this.emitTimeUpdate();
+		}
+
+		// Do game transitions if timer === 0
+		if (this.game.timer > 0) return;
+
+		if (this.game.status === 'PREGAME') {
+			this.activate();
+		} else if (this.game.status === 'INGAME') {
+			this.endGame();
+		}
+	}
+
+	emitTimeUpdate() {
+		this.emit('timerUpdate', this.game.timer);
+	}
+
 	activate() {
 		this.game.status = 'INGAME';
+		this.game.timer = DEFAULTS.GAME_LENGTH;
 		this.emit('start');
 	}
 
 	endGame() {
 		this.game.status = 'ENDED';
 
-		// Clear all timers
+		if (this.timerUpdate) {
+			clearInterval(this.timerUpdate);
+		}
 
 		this.checkTimeWinConditions();
 	}
@@ -327,5 +337,32 @@ export class GameRunner extends EventEmitter {
 		this.emit('end');
 	}
 
-	// detectiveUseReveal(detective: GamePlayer, target: GamePlayer) {}
+	detectiveUseReveal(detectiveId: number, targetId: number) {
+		// Detective and target must be valid players
+		const detective = this.getPlayer(detectiveId);
+		const target = this.getPlayer(targetId);
+
+		if (detective === null) {
+			throw new Error('Specified detective is not in this game');
+		}
+
+		if (target === null) {
+			throw new Error('Specified target is not in this game');
+		}
+
+		// Detective must be alive
+		if (!detective.alive) {
+			throw new Error('Detective is not alive');
+		}
+
+		// Target must be alive
+		if (!target.alive) {
+			throw new Error('Target must be alive');
+		}
+
+		// Detective must have a reveal remaining
+		if (!detective.reveals || detective.reveals === 0) {
+			throw new Error('Detective has no reveals remaining.');
+		}
+	}
 }

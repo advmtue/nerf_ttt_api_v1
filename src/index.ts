@@ -56,6 +56,7 @@ export class TTTAPI {
 	}
 }
 
+// Create a new server instance and get things going
 const api = new TTTAPI();
 api.start(3000)
 	.then(() => {

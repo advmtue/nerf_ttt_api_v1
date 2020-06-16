@@ -27,6 +27,7 @@ export class GameManager extends EventEmitter {
 		g.on('end', () => this.emit('end', g));
 		g.on('pregame', () => this.emit('pregame', g));
 		g.on('playerDeath', (p: GamePlayer) => this.emit('playerDeath', g, p));
+		g.on('timerUpdate', (secs: number) => this.emit('timerUpdate', g, secs));
 
 		// Emit newGame event
 		this.emit('new', g);

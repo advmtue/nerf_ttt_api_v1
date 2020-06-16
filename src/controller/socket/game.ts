@@ -76,12 +76,18 @@ export class SocketGameOutController {
 		gc.on('playerDeath', this.playerDeath.bind(this));
 		gc.on('gameCloseAdmin', this.gameCloseAdmin.bind(this));
 		gc.on('gameCloseOwner', this.gameCloseOwner.bind(this));
+		gc.on('timerUpdate', this.timerUpdate.bind(this));
 	}
 
 	// Apply routes for authenticated socket
 	applyRoutes(socket: SocketIO.Socket) {
 		// Do nothing for inbound routes here
 		// Configure them in SocketGameInController
+	}
+
+	// Send a timer update to players
+	timerUpdate(gr: GameRunner, seconds: number) {
+		this.io.to(`game ${gr.state.id}`).emit('timerUpdate', seconds);
 	}
 
 	// Admin closed the game
@@ -120,10 +126,12 @@ export class SocketGameOutController {
 
 	// Game start
 	gameStart(gr: GameRunner) {
-		gr.state.players.forEach((pl) => {
-			let gameState = filterGameState(gr.state, pl);
-			this.io.to(`player ${pl.id}`).emit('getGame', gameState);
-		});
+		logger.warn(`GAME#${gr.id} START = ${gr.state.timer}`);
+		this.io.to(`game ${gr.state.id}`).emit('gameStart', gr.state.timer);
+		/**
+		 * We don't need to filter the game state here
+		 * We can assume the player already has it if they get this event
+		 */
 	}
 
 	// Game pregame
