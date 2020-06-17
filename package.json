@@ -4,7 +4,7 @@
   "description": "API endpoints for Nerf TTT",
   "main": "dist/index.js",
   "scripts": {
-    "test": "xo",
+    "test": "mocha -r ts-node/register test/**/*.ts",
     "dev": "docker-compose -f docker-compose-dev.yml up --build",
     "prod": "docker-compose up --build",
     "stop-dev": "docker-compose -f docker-compose-dev.yml down",
@@ -47,6 +47,7 @@
     "@types/cors": "^2.8.6",
     "@types/jsonwebtoken": "^8.3.9",
     "@types/lodash": "^4.14.155",
+    "@types/mocha": "^7.0.2",
     "@types/node": "^13.11.0",
     "@types/socket.io": "^2.1.4",
     "body-parser": "^1.19.0",
@@ -56,8 +57,10 @@
     "express": "^4.17.1",
     "jsonwebtoken": "^8.5.1",
     "lodash": "^4.17.15",
+    "mocha": "^8.0.1",
     "pg": "^8.0.0",
     "pg-promise": "^10.5.6",
-    "socket.io": "^2.3.0"
+    "socket.io": "^2.3.0",
+    "ts-node": "^8.10.2"
   }
 }

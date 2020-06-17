@@ -29,5 +29,10 @@ export function createToken(player: Player, secret: string): string {
  */
 export function decodeId(token: string, secret: string): number {
 	const jwtData = jwt.verify(token, secret) as { id: number };
+
+	if (!jwtData.id) {
+		throw new Error('No .id field on decoded jwt');
+	}
+
 	return jwtData.id;
 }
