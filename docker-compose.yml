@@ -5,14 +5,12 @@ services:
         build: .
         image: nerf_ttt_api
         container_name: nerf_ttt_api
-        ports:
-            - '8080:3000'
         volumes:
             - ./src:/usr/src/app/src
         networks:
-            - nerf_ttt
+            - cluster
         tty: true
 
 networks:
-    nerf_ttt:
+    cluster:
         external: true
