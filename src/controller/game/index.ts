@@ -28,6 +28,7 @@ export class GameManager extends EventEmitter {
 		g.on('pregame', () => this.emit('pregame', g));
 		g.on('playerDeath', (p: GamePlayer) => this.emit('playerDeath', g, p));
 		g.on('timerUpdate', (secs: number) => this.emit('timerUpdate', g, secs));
+		g.on('revealPlayer', (p: number) => this.emit('revealPlayer', g, p));
 
 		// Emit newGame event
 		this.emit('new', g);
@@ -42,6 +43,12 @@ export class GameManager extends EventEmitter {
 		}
 
 		return g;
+	}
+
+	detectiveUseReveal(gameId: number, callerId: number, victimId: number) {
+		const g = this.get(gameId);
+
+		g.detectiveUseReveal(callerId, victimId);
 	}
 
 	playerStartGame(gameId: number, player: Player) {

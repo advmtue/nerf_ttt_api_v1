@@ -11,7 +11,7 @@ import { roleConfig } from '../../lib/utils';
 const DEFAULTS = {
 	PREGAME_TIME: 20,
 	GAME_LENGTH: 20 * 60,
-	DETECTIVE_REVEALS: 3,
+	DETECTIVE_REVEALS: 100,
 }
 
 // Helper function to determine seconds between two dates
@@ -350,6 +350,11 @@ export class GameRunner extends EventEmitter {
 			throw new Error('Specified target is not in this game');
 		}
 
+		// Caller must be the detective
+		if (detective.role !== 'DETECTIVE') {
+			throw new Error('Calling player is not detective');
+		}
+
 		// Detective must be alive
 		if (!detective.alive) {
 			throw new Error('Detective is not alive');
@@ -364,5 +369,9 @@ export class GameRunner extends EventEmitter {
 		if (!detective.reveals || detective.reveals === 0) {
 			throw new Error('Detective has no reveals remaining.');
 		}
+
+		// Perform a reveal
+		detective.reveals--;
+		this.emit('revealPlayer', targetId);
 	}
 }

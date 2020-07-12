@@ -6,7 +6,7 @@ import { logger } from '../../lib/logger';
 import { gameStateToLobby } from '../../lib/utils';
 
 // Models
-import { Game, GamePlayer } from '../../models/game';
+import { GamePlayer } from '../../models/game';
 import { filterGameState } from '../../lib/utils';
 import { GameRunner } from '../game/game';
 
@@ -25,6 +25,19 @@ export class SocketGameInController {
 		socket.on('getLobbyList', this.getLobbyList.bind(this, socket));
 		socket.on('getGame', this.getGame.bind(this, socket));
 		socket.on('playerRegisterDeath', this.playerRegisterDeath.bind(this, socket));
+		socket.on('detectiveUseReveal', this.detectiveUseReveal.bind(this, socket));
+	}
+
+	detectiveUseReveal(socket: SocketIO.Socket, gameId: number, playerId: number) {
+		logger.info('detectiveUseReveal', {gameId, playerId});
+
+		if (!socket.player) return;
+
+		try {
+			this.gc.detectiveUseReveal(gameId, socket.player.id, playerId);
+		} catch (error) {
+			logger.error(error);
+		}
 	}
 
 	playerRegisterDeath(socket: SocketIO.Socket, gameId: number, killerId: number) {
@@ -65,24 +78,24 @@ export class SocketGameOutController {
 		private gc: GameManager,
 		private db: Database
 	) {
-		gc.on('new', this.newGame.bind(this));
-		gc.on('playerJoin', this.playerJoin.bind(this));
-		gc.on('playerLeave', this.playerLeave.bind(this));
-		gc.on('playerReady', this.playerReady.bind(this));
-		gc.on('playerUnready', this.playerUnready.bind(this));
-		gc.on('pregame', this.gamePregame.bind(this));
-		gc.on('start', this.gameStart.bind(this));
-		gc.on('end', this.gameEnd.bind(this));
-		gc.on('playerDeath', this.playerDeath.bind(this));
-		gc.on('gameCloseAdmin', this.gameCloseAdmin.bind(this));
-		gc.on('gameCloseOwner', this.gameCloseOwner.bind(this));
-		gc.on('timerUpdate', this.timerUpdate.bind(this));
+		this.gc.on('new', this.newGame.bind(this));
+		this.gc.on('playerJoin', this.playerJoin.bind(this));
+		this.gc.on('playerLeave', this.playerLeave.bind(this));
+		this.gc.on('playerReady', this.playerReady.bind(this));
+		this.gc.on('playerUnready', this.playerUnready.bind(this));
+		this.gc.on('pregame', this.gamePregame.bind(this));
+		this.gc.on('start', this.gameStart.bind(this));
+		this.gc.on('end', this.gameEnd.bind(this));
+		this.gc.on('playerDeath', this.playerDeath.bind(this));
+		this.gc.on('gameCloseAdmin', this.gameCloseAdmin.bind(this));
+		this.gc.on('gameCloseOwner', this.gameCloseOwner.bind(this));
+		this.gc.on('timerUpdate', this.timerUpdate.bind(this));
+		this.gc.on('revealPlayer', this.revealPlayer.bind(this));
 	}
 
-	// Apply routes for authenticated socket
-	applyRoutes(socket: SocketIO.Socket) {
-		// Do nothing for inbound routes here
-		// Configure them in SocketGameInController
+	// Reveal a player
+	revealPlayer(gr: GameRunner, playerId: number) {
+		this.io.to(`player ${playerId}`).emit('reveal');
 	}
 
 	// Send a timer update to players
